@@ -21,23 +21,31 @@ The app runs in **mock mode** with no env vars set — all seeded data is availa
 
 ## Environment Variables
 
+Env vars describe which **backends are available** — they do not select the data mode. The Demo/Live mode is chosen at runtime in the UI and persisted in `localStorage`.
+
 | Variable | Required | Description |
 |---|---|---|
 | `VITE_SUPABASE_URL` | Optional | Your Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Optional | Supabase anon/public key |
-| `VITE_NEWS_API_KEY` | Optional | [newsapi.org](https://newsapi.org) free key |
+| `VITE_NEWS_API_KEY` | Optional | [newsapi.org](https://newsapi.org) free key (enables live news ingestion) |
 | `VITE_NEWS_API_PROXY_URL` | Optional | Proxy endpoint for NewsAPI (needed for browser deploys) |
 | `VITE_OPEN_METEO_BASE_URL` | Optional | Defaults to `https://api.open-meteo.com/v1` |
-| `VITE_DEMO_CITY` | Optional | City name for Open-Meteo / NewsAPI queries (default: `Metroville`) |
-| `VITE_APP_ID` | Optional | Application identifier (default: `shadowgrid-ai`) |
+| `VITE_DEMO_CITY` | Optional | City name for live weather / news queries (default: `Metroville`) |
 
-### Data Modes
+### Data Modes (runtime-selectable)
 
-| Mode | Condition | Behaviour |
+The app starts in **Demo** mode and exposes a Demo/Live switcher in the sidebar and Operations Center. Both datasets live in the database, separated by a `dataset_type` column.
+
+| Mode | Source | Behaviour |
 |---|---|---|
-| **mock** | No Supabase URL set | Uses seeded in-memory data only |
-| **hybrid** | Supabase URL set, no News API key | Supabase persistence + Open-Meteo weather only |
-| **live** | Supabase URL + News API key both set | Full Supabase + Open-Meteo + NewsAPI ingestion |
+| **demo** (default) | `dataset_type='demo'` rows | Stable seeded dataset. Presentation-safe and immutable from the browser (RLS). Falls back to in-memory seed if Supabase is unconfigured. |
+| **live** | `dataset_type='live'` rows | Real ingested dataset. Weather (Open-Meteo) + news (NewsAPI) are normalised, stored as live rows, and scored. Starts empty, grows per ingest. |
+
+**How switching works**
+- Selection persists in `localStorage` (`shadowgrid.dataMode`); refresh keeps it.
+- Switching clears state and reloads the chosen dataset from the DB, then re-runs the engine.
+- *Reset to Demo* clears the saved preference; *Clear Live Dataset* wipes all `live` rows.
+- Ingestion runs in Live mode only and never modifies Demo rows.
 
 ---
 
@@ -47,16 +55,19 @@ The app runs in **mock mode** with no env vars set — all seeded data is availa
 - Go to [app.supabase.com](https://app.supabase.com) → New project
 - Copy **Project URL** and **anon public key** into `.env`
 
-### 2. Apply the schema migration
+### 2. Apply the schema migrations
 ```sql
--- Run in Supabase SQL Editor:
--- Copy & paste contents of: supabase/migrations/00001_create_shadowgrid_schema.sql
+-- Run in Supabase SQL Editor, in order:
+-- 1. supabase/migrations/00001_create_shadowgrid_schema.sql  (tables + dataset_type + read/insert policies)
+-- 2. supabase/migrations/00002_add_dataset_type.sql          (idempotent; no-op on a fresh 00001)
+-- 3. supabase/migrations/00003_live_delete_policies.sql      (live-only insert/update/delete RLS)
 ```
 
 ### 3. Seed the database
 ```sql
 -- Run in Supabase SQL Editor:
 -- Copy & paste contents of: supabase/seed.sql
+-- All seeded rows are tagged dataset_type='demo'. The live dataset starts empty.
 ```
 
 ### 4. Verify tables
@@ -66,6 +77,10 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 -- Expected: citizen_reports, external_signals, failure_chains, 
 --           recommendations, risk_scores, team_allocations, zones
+
+-- Confirm dataset separation:
+SELECT dataset_type, count(*) FROM risk_scores GROUP BY dataset_type;
+-- Expected after seeding: demo | 13
 ```
 
 ---
@@ -162,4 +177,17 @@ Alternatively, use a Vercel cron job (`vercel.json`):
 - `pnpm preview` — preview the production build locally
 - `pnpm lint` — TypeScript type check (tsgo) + Biome lint
 - `pnpm lint:ci` — full lint pipeline (Linux/CI only, includes ast-grep + tailwind checks)
-- The app works fully offline in mock mode — no internet required for demos
+- The app works fully offline in Demo mode — no internet required for demos
+
+---
+
+## Testing Both Modes Locally
+
+1. **Start the app** — `pnpm dev`, open http://localhost:5173. It loads in **Demo** mode by default (yellow badge in the sidebar/header).
+2. **Confirm Demo data** — Dashboard shows 7 Metroville zones with seeded risk scores. This data is read from `dataset_type='demo'` rows (or in-memory seed if Supabase is not configured).
+3. **Switch to Live** — Use the Demo/Live toggle in the sidebar, or open **Operations → Data Mode** and click **Live**. The badge turns green and the app reloads from `dataset_type='live'` rows (empty on first run).
+4. **Ingest live data** — In Operations, click **Ingest Signals**. This fetches Open-Meteo weather (and NewsAPI news if `VITE_NEWS_API_KEY` is set), normalises them into `live` signals, stores them, re-runs scoring, and persists the live risk scores / recommendations / chains / allocations. The *Last Ingest* panel shows source (`live` vs `fallback`) and counts.
+5. **Verify separation** — Switch back to **Demo**: the seeded data is unchanged and stable. Switch to **Live**: your ingested data persists. Refresh the page — your selected mode is remembered.
+6. **Reset** — *Reset to Demo* returns to the default mode; *Clear Live Dataset* (Live mode) wipes all live rows from the DB.
+
+> Demo mode is the safe presentation default. Live ingestion can never modify Demo rows — this is enforced by row-level security (browser may only write `dataset_type='live'`).

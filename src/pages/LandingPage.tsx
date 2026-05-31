@@ -44,9 +44,8 @@ export default function LandingPage() {
   ];
 
   const modeBadgeColor: Record<string, string> = {
-    mock:   'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
-    hybrid: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
-    live:   'bg-green-500/10 text-green-300 border-green-500/30',
+    demo: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
+    live: 'bg-green-500/10 text-green-300 border-green-500/30',
   };
 
   return (
@@ -104,7 +103,7 @@ export default function LandingPage() {
 
           {/* Data mode label */}
           <div className="mt-4 flex justify-center">
-            <Badge className={`text-[10px] h-5 border ${modeBadgeColor[dataMode] ?? modeBadgeColor.mock}`}>
+            <Badge className={`text-[10px] h-5 border ${modeBadgeColor[dataMode] ?? modeBadgeColor.demo}`}>
               {dataModeLabel}
             </Badge>
           </div>

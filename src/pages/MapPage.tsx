@@ -13,6 +13,7 @@ import {
   getRiskColor,
   getRiskLevel,
   RISK_LEVEL_CONFIG,
+  DEMO_CITY_CONFIG,
 } from '@/lib/constants';
 import { getCategoryColor } from '@/lib/uiHelpers';
 import type { RiskCategory, ZoneRiskSummary } from '@/types/types';
@@ -36,7 +37,7 @@ function getScoreForFilter(summary: ZoneRiskSummary, filter: FilterCategory): nu
 }
 
 export default function MapPage() {
-  const { zones, zoneSummaries, loading, refresh, ingesting, ingestAndRefresh, dataModeLabel } = useAppStore();
+  const { zones, zoneSummaries, loading, refresh, ingesting, dataModeLabel } = useAppStore();
   const [selectedZoneId, setSelectedZoneId] = useState<string | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('overall');
   const [legendVisible, setLegendVisible] = useState(true);
@@ -65,8 +66,8 @@ export default function MapPage() {
       if (!containerRef.current || mapRef.current) return;
 
       const map = L.map(containerRef.current, {
-        center: [40.718, -74.005],
-        zoom: 12,
+        center: [DEMO_CITY_CONFIG.lat, DEMO_CITY_CONFIG.lng],
+        zoom: DEMO_CITY_CONFIG.zoom,
         zoomControl: true,
         attributionControl: false,
       });
@@ -218,10 +219,10 @@ export default function MapPage() {
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-xs gap-1.5 border border-border text-muted-foreground hover:bg-accent"
-            onClick={() => ingestAndRefresh()}
+            onClick={() => refresh()}
             disabled={ingesting || loading}
           >
-            <RefreshCw size={11} className={ingesting ? 'animate-spin' : ''} />
+            <RefreshCw size={11} className={(ingesting || loading) ? 'animate-spin' : ''} />
             <span className="hidden sm:block">Refresh</span>
           </Button>
         </div>

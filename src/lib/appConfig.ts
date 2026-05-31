@@ -3,11 +3,14 @@
 // All env-var access goes through this module.  No page, service, or engine
 // file should call `import.meta.env` directly — import from here instead.
 //
-// Three operation modes (resolved at runtime):
-//   MOCK   — no Supabase keys present; uses only seeded local data
-//   HYBRID — Supabase keys present but external API keys absent; persists
-//            to/from Supabase, falls back to seeded signals for weather/news
-//   LIVE   — all keys present; full persistence + live external ingestion
+// Two RUNTIME data modes (user-selectable at runtime, see lib/dataMode.ts):
+//   DEMO — stable seeded dataset stored in the DB (dataset_type='demo').
+//          Deterministic, presentation-safe, unaffected by external APIs.
+//   LIVE — real ingested dataset stored in the DB (dataset_type='live').
+//          Populated over time from Open-Meteo weather + NewsAPI news.
+//
+// The env vars below describe CAPABILITIES (what backends are configured),
+// not the active mode. The active mode is chosen by the user at runtime.
 
 // ─── Raw env access ───────────────────────────────────────────────────────────
 
@@ -37,28 +40,12 @@ export const NEWS_API_PROXY_URL: string =
 
 export const DEMO_CITY: string = env.VITE_DEMO_CITY ?? 'Metroville';
 
-// ─── Data mode resolution ────────────────────────────────────────────────────
+// ─── Capability flags ─────────────────────────────────────────────────────────
+// These describe which backends are wired up, used by the service layer to
+// decide whether to hit Supabase / external APIs or fall back to seeded data.
 
-export type DataMode = 'mock' | 'hybrid' | 'live';
+/** True when a Supabase project URL + anon key are present. */
+export const SUPABASE_CONFIGURED: boolean = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-export function resolveDataMode(): DataMode {
-  const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  const hasExternalApis = Boolean(NEWS_API_KEY);   // Open-Meteo is keyless
-  if (!hasSupabase)  return 'mock';
-  if (!hasExternalApis) return 'hybrid';
-  return 'live';
-}
-
-export const DATA_MODE: DataMode = resolveDataMode();
-
-export const DATA_MODE_LABELS: Record<DataMode, string> = {
-  mock:   'Mock / Seeded',
-  hybrid: 'Supabase + Seeded Signals',
-  live:   'Supabase + Live APIs',
-};
-
-export const DATA_MODE_DESCRIPTIONS: Record<DataMode, string> = {
-  mock:   'Running on seeded demo data. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable persistence.',
-  hybrid: 'Persisting to Supabase. Add VITE_NEWS_API_KEY to enable live news signal ingestion.',
-  live:   'Fully live: Supabase persistence + Open-Meteo weather + NewsAPI news signals.',
-};
+/** True when a NewsAPI key is present (enables live news ingestion). */
+export const NEWS_CONFIGURED: boolean = Boolean(NEWS_API_KEY);

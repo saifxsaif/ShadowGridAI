@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Home, LayoutDashboard, BarChart3, FileWarning, Settings2,
-  Menu, Activity, Shield, Map, Database, Radio, Server,
+  Menu, Activity, Shield, Map, FlaskConical, Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/AppContext';
+import { DataModeSwitcher } from '@/components/common/DataModeSwitcher';
+import type { DataMode } from '@/lib/dataMode';
 
 const NAV_ITEMS = [
   { href: '/',           label: 'Overview',     icon: Home },
@@ -22,11 +22,10 @@ const NAV_ITEMS = [
   { href: '/operations', label: 'Operations',   icon: Settings2 },
 ];
 
-// Data-mode badge config
-const DATA_MODE_BADGE: Record<string, { icon: typeof Database; color: string; label: string }> = {
-  mock:   { icon: Database, color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10', label: 'Demo' },
-  hybrid: { icon: Server,   color: 'text-blue-400 border-blue-500/30 bg-blue-500/10',       label: 'Hybrid' },
-  live:   { icon: Radio,    color: 'text-green-400 border-green-500/30 bg-green-500/10',    label: 'Live' },
+// Data-mode badge config (runtime: demo | live)
+const DATA_MODE_BADGE: Record<DataMode, { icon: typeof FlaskConical; color: string }> = {
+  demo: { icon: FlaskConical, color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
+  live: { icon: Radio,        color: 'text-green-400 border-green-500/30 bg-green-500/10' },
 };
 
 function NavItem({
@@ -53,9 +52,7 @@ function NavItem({
 }
 
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
-  const { dataMode, dataModeLabel, dataModeDescription, lastRefresh } = useAppStore();
-  const modeConfig = DATA_MODE_BADGE[dataMode] ?? DATA_MODE_BADGE.mock;
-  const ModeIcon = modeConfig.icon;
+  const { lastRefresh } = useAppStore();
 
   return (
     <div className="flex flex-col h-full bg-sidebar-background">
@@ -85,24 +82,10 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         ))}
       </nav>
 
-      {/* Footer: data mode + last refresh */}
+      {/* Footer: data mode switcher + last refresh */}
       <div className="px-4 py-4 border-t border-sidebar-border space-y-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs cursor-default w-fit',
-                modeConfig.color,
-              )}>
-                <ModeIcon size={10} />
-                <span className="font-medium">{dataModeLabel}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[200px] text-xs">
-              {dataModeDescription}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Data Mode</p>
+        <DataModeSwitcher variant="compact" />
         <p className="text-[11px] text-muted-foreground">
           Last updated: {lastRefresh.toLocaleTimeString()}
         </p>
@@ -122,7 +105,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const currentPage = NAV_ITEMS.find(n => n.href === location.pathname)?.label ?? 'ShadowGrid AI';
   const criticalCount = zoneSummaries.filter(s => s.risk_level === 'critical').length;
-  const modeConfig = DATA_MODE_BADGE[dataMode] ?? DATA_MODE_BADGE.mock;
+  const modeConfig = DATA_MODE_BADGE[dataMode] ?? DATA_MODE_BADGE.demo;
   const ModeIcon = modeConfig.icon;
 
   return (

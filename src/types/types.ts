@@ -16,6 +16,12 @@ export type SignalSource = 'citizen' | 'weather' | 'news' | 'sensor' | 'seeded';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
+// ─── Dataset separation ───────────────────────────────────────────────────────
+// Every dynamic record belongs to either the stable seeded "demo" dataset or
+// the live, ingested "live" dataset. Zones are shared infrastructure and are
+// NOT scoped by dataset.
+export type DatasetType = 'demo' | 'live';
+
 // ─── Zone ─────────────────────────────────────────────────────────────────────
 
 export interface Zone {
@@ -51,6 +57,7 @@ export interface RiskScore {
   propagation_component: number;
   explanation: string;
   updated_at: string;
+  dataset_type?: DatasetType;
 }
 
 export interface ZoneRiskSummary {
@@ -86,6 +93,7 @@ export interface CitizenReport {
   source: 'citizen';
   status: 'pending' | 'acknowledged' | 'resolved';
   created_at: string;
+  dataset_type?: DatasetType;
 }
 
 export type CitizenReportInsert = Omit<CitizenReport, 'id' | 'created_at' | 'source' | 'status'>;
@@ -114,6 +122,7 @@ export interface ExternalSignal {
   summary: string;
   raw_payload?: Record<string, unknown>;
   created_at: string;
+  dataset_type?: DatasetType;
 }
 
 // ─── Recommendations ──────────────────────────────────────────────────────────
@@ -140,6 +149,7 @@ export interface Recommendation {
   expected_impact_reduction: number; // percentage
   status: 'pending' | 'in_progress' | 'completed';
   created_at: string;
+  dataset_type?: DatasetType;
 }
 
 // ─── Failure Chains ───────────────────────────────────────────────────────────
@@ -162,6 +172,7 @@ export interface FailureChain {
   overall_risk_level: RiskLevel;
   is_active: boolean;
   created_at: string;
+  dataset_type?: DatasetType;
 }
 
 // ─── Team Allocations ─────────────────────────────────────────────────────────
@@ -176,6 +187,7 @@ export interface TeamAllocation {
   deployment_notes: string;
   status: 'planned' | 'deployed' | 'completed';
   created_at: string;
+  dataset_type?: DatasetType;
 }
 
 // ─── Dashboard Summary ────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 // ShadowGrid AI — Admin / Operations Page
 // Uses AppContext for computed recommendations, team allocations, and zone summaries.
 // Now includes:
-//   • Data Mode panel (mock / hybrid / live)
+//   • Data Mode panel with runtime Demo/Live switcher
 //   • Live signal ingestion button with result inspector
 //   • Last ingest summary (weather + news counts, errors)
 //   • Signal inspector table (latest external signals)
@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import {
   Settings2, Users, ChevronRight, CheckCircle2, Clock, Zap, ArrowUpRight,
   RefreshCw, Radio, Cloud, Newspaper, Database, AlertTriangle, Info,
-  FlaskConical,
+  FlaskConical, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RiskBadge } from '@/components/common/RiskBadge';
 import { CategoryIcon } from '@/components/common/CategoryIcon';
+import { DataModeSwitcher } from '@/components/common/DataModeSwitcher';
 import { useAppStore } from '@/store/AppContext';
 import { RISK_CATEGORY_LABELS, ACTION_TYPE_LABELS } from '@/lib/constants';
 import { formatTimeAgo } from '@/lib/uiHelpers';
@@ -38,12 +39,6 @@ const URGENCY_ICONS: Record<string, React.ReactNode> = {
   immediate: <Zap size={11} />,
   urgent:    <ArrowUpRight size={11} />,
   scheduled: <Clock size={11} />,
-};
-
-const DATA_MODE_CONFIG = {
-  mock:   { color: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30', icon: <FlaskConical size={12} /> },
-  hybrid: { color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',       icon: <Database size={12} /> },
-  live:   { color: 'bg-green-500/15 text-green-400 border-green-500/30',    icon: <Radio size={12} /> },
 };
 
 const SOURCE_CONFIG = {
@@ -66,13 +61,13 @@ export default function OperationsPage() {
     updateRecommendationStatus,
     refresh,
     ingestAndRefresh,
+    resetLiveData,
     loading,
     ingesting,
     lastRefresh,
     lastIngestResult,
+    lastLiveIngestAt,
     dataMode,
-    dataModeLabel,
-    dataModeDescription,
   } = useAppStore();
 
   const [signalFilter, setSignalFilter] = useState<string>('all');
@@ -85,6 +80,10 @@ export default function OperationsPage() {
   }
 
   async function handleIngest() {
+    if (dataMode !== 'live') {
+      toast.info('Switch to Live mode to ingest real signals. Demo data stays stable.');
+      return;
+    }
     toast.info('Fetching live weather and news signals…');
     try {
       const result = await ingestAndRefresh();
@@ -104,6 +103,12 @@ export default function OperationsPage() {
     } catch {
       toast.error('Signal ingestion failed. Using existing data.');
     }
+  }
+
+  async function handleResetLive() {
+    toast.info('Clearing live dataset…');
+    await resetLiveData();
+    toast.success('Live dataset cleared.');
   }
 
   const immediateCount = recommendations.filter(r => r.urgency === 'immediate' && r.status === 'pending').length;
@@ -126,8 +131,6 @@ export default function OperationsPage() {
     ? externalSignals
     : externalSignals.filter(s => s.source === signalFilter)
   ).slice(0, 30);
-
-  const modeCfg = DATA_MODE_CONFIG[dataMode];
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -166,7 +169,8 @@ export default function OperationsPage() {
             variant="ghost"
             className="gap-1.5 border border-primary/40 text-primary hover:bg-primary/10"
             onClick={handleIngest}
-            disabled={loading || ingesting}
+            disabled={loading || ingesting || dataMode !== 'live'}
+            title={dataMode !== 'live' ? 'Switch to Live mode to ingest signals' : 'Ingest live signals'}
           >
             <Radio size={13} className={ingesting ? 'animate-pulse' : ''} />
             <span className="sr-only md:not-sr-only">{ingesting ? 'Fetching…' : 'Ingest Signals'}</span>
@@ -179,28 +183,43 @@ export default function OperationsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Database size={14} className="text-primary" />
-            System Status
+            Data Mode
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col md:flex-row md:items-start gap-4">
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`${modeCfg.color} gap-1`}>
-                  {modeCfg.icon}
-                  {dataModeLabel}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  Last refresh: {lastRefresh.toLocaleTimeString()}
-                </span>
+          <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+            <div className="flex-1 space-y-3">
+              <DataModeSwitcher variant="full" />
+              <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+                <span>Last refresh: {lastRefresh.toLocaleTimeString()}</span>
+                {dataMode === 'live' && (
+                  <>
+                    <span>·</span>
+                    <span>
+                      Last live ingest:{' '}
+                      {lastLiveIngestAt
+                        ? new Date(lastLiveIngestAt).toLocaleTimeString()
+                        : 'never this session'}
+                    </span>
+                  </>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground text-pretty max-w-xl">
-                {dataModeDescription}
-              </p>
+              {dataMode === 'live' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1.5 text-xs text-red-400 border border-red-500/30 hover:bg-red-500/10"
+                  onClick={handleResetLive}
+                  disabled={loading || ingesting}
+                >
+                  <Trash2 size={12} />
+                  Clear Live Dataset
+                </Button>
+              )}
             </div>
 
             {/* Last ingest result summary */}
-            {lastIngestResult && (
+            {lastIngestResult && dataMode === 'live' && (
               <div className="shrink-0 rounded-lg border border-border bg-muted/40 p-3 space-y-1.5 text-xs min-w-52">
                 <p className="font-semibold text-foreground flex items-center gap-1.5">
                   <Info size={12} className="text-primary" />

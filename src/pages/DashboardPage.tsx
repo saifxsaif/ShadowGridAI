@@ -43,9 +43,8 @@ export default function DashboardPage() {
   const selectedExplanation = selectedZoneId ? getExplanationForZone(selectedZoneId) : undefined;
 
   const modeBadgeColor: Record<string, string> = {
-    mock:   'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
-    hybrid: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
-    live:   'bg-green-500/10 text-green-300 border-green-500/30',
+    demo: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
+    live: 'bg-green-500/10 text-green-300 border-green-500/30',
   };
 
   return (
@@ -55,7 +54,7 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold text-foreground">City Risk Dashboard</h1>
-            <Badge className={`text-[10px] h-5 border ${modeBadgeColor[dataMode] ?? modeBadgeColor.mock}`}>
+            <Badge className={`text-[10px] h-5 border ${modeBadgeColor[dataMode] ?? modeBadgeColor.demo}`}>
               {dataModeLabel}
             </Badge>
           </div>

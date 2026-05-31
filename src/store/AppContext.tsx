@@ -2,17 +2,22 @@
 // Single reactive store for computed engine output + raw data.
 // All pages read from this context instead of calling services independently.
 //
+// Runtime data mode (user-selectable, persisted in localStorage):
+//   demo — stable seeded dataset (dataset_type='demo'); deterministic + safe
+//   live — real ingested dataset (dataset_type='live'); grows over time
+//
 // Lifecycle:
-//   1. On mount, AppProvider loads raw data from dataService (Supabase → mock fallback)
+//   1. On mount, AppProvider reads the persisted mode (default 'demo') and
+//      loads the matching dataset from dataService (Supabase → seeded fallback)
 //   2. Raw data is fed into runEngine() to produce EngineOutput
 //   3. EngineOutput is stored in context and exposed via useAppStore()
-//   4. When a citizen report is submitted the new report is appended to raw data
-//      and runEngine() is re-invoked — all consumers re-render with updated scores
-//   5. ingestAndRefresh() fetches live weather + news signals, merges them, re-runs engine
-//   6. Manual refresh (refresh()) re-fetches from Supabase / seeded fallback
+//   4. Switching modes (setDataMode) clears state and reloads the other dataset
+//   5. ingestAndRefresh() (live only) fetches live weather + news, merges them,
+//      re-runs the engine, and persists the live dataset to the DB
+//   6. Submitting a citizen report updates state and persists to the live dataset
 
 import React, {
-  createContext, useContext, useEffect, useState, useCallback,
+  createContext, useContext, useEffect, useState, useCallback, useRef,
   type ReactNode,
 } from 'react';
 import type {
@@ -28,12 +33,27 @@ import {
   fetchCitizenReports,
   fetchExternalSignals,
   submitCitizenReport as persistReport,
+  updateRecommendationStatus as persistRecStatus,
 } from '@/services/dataService';
 import {
   ingestExternalSignals,
   type IngestResult,
 } from '@/services/ingestionService';
-import { DATA_MODE, DATA_MODE_LABELS, DATA_MODE_DESCRIPTIONS, type DataMode } from '@/lib/appConfig';
+import {
+  persistLiveEngineOutput,
+  resetLiveDataset,
+} from '@/services/livePersistence';
+import {
+  type DataMode,
+  DEFAULT_DATA_MODE,
+  DATA_MODE_LABELS,
+  DATA_MODE_DESCRIPTIONS,
+  getStoredDataMode,
+  storeDataMode,
+  clearStoredDataMode,
+  getCapabilities,
+  type DataModeCapabilities,
+} from '@/lib/dataMode';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -43,11 +63,13 @@ export interface AppState {
   ingesting: boolean;
   lastRefresh: Date;
   lastIngestResult: IngestResult | null;
+  lastLiveIngestAt: string | null;
 
-  // Data mode (mock | hybrid | live) — derived from env vars at startup
+  // Data mode (demo | live) — user-selectable at runtime, persisted
   dataMode: DataMode;
   dataModeLabel: string;
   dataModeDescription: string;
+  capabilities: DataModeCapabilities;
 
   // Raw data
   zones: Zone[];
@@ -70,7 +92,13 @@ export interface AppState {
 
   // Actions
   refresh: () => Promise<void>;
-  /** Fetch live weather + news signals, merge, re-run engine */
+  /** Switch the active data mode (demo | live). Reloads the matching dataset. */
+  setDataMode: (mode: DataMode) => Promise<void>;
+  /** Reset to the default Demo mode and wipe any persisted preference. */
+  resetDataMode: () => Promise<void>;
+  /** Wipe all live dataset rows from the DB, then reload. */
+  resetLiveData: () => Promise<void>;
+  /** Fetch live weather + news signals, merge, re-run engine (live mode only). */
   ingestAndRefresh: () => Promise<IngestResult>;
   setAvailableTeams: (n: number) => void;
   submitReport: (report: CitizenReportInsert) => Promise<{ success: boolean; error?: string }>;
@@ -82,6 +110,7 @@ export interface AppState {
 }
 
 const EMPTY_MAP = new Map<string, ZoneExplanation>();
+const INITIAL_MODE = getStoredDataMode();
 
 const DEFAULT_SUMMARY: DashboardSummary = {
   total_active_signals: 0,
@@ -99,9 +128,11 @@ const DEFAULT_STATE: AppState = {
   ingesting: false,
   lastRefresh: new Date(),
   lastIngestResult: null,
-  dataMode: DATA_MODE,
-  dataModeLabel: DATA_MODE_LABELS[DATA_MODE],
-  dataModeDescription: DATA_MODE_DESCRIPTIONS[DATA_MODE],
+  lastLiveIngestAt: null,
+  dataMode: INITIAL_MODE,
+  dataModeLabel: DATA_MODE_LABELS[INITIAL_MODE],
+  dataModeDescription: DATA_MODE_DESCRIPTIONS[INITIAL_MODE],
+  capabilities: getCapabilities(),
   zones: [],
   citizenReports: [],
   externalSignals: [],
@@ -116,6 +147,9 @@ const DEFAULT_STATE: AppState = {
   signalTrend: [],
   availableTeams: 8,
   refresh: async () => {},
+  setDataMode: async () => {},
+  resetDataMode: async () => {},
+  resetLiveData: async () => {},
   ingestAndRefresh: async () => ({
     signals: [], newSignalCount: 0, persisted: false, errors: [],
     ingestedAt: new Date().toISOString(),
@@ -142,15 +176,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ingesting, setIngesting] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [lastIngestResult, setLastIngestResult] = useState<IngestResult | null>(null);
+  const [lastLiveIngestAt, setLastLiveIngestAt] = useState<string | null>(null);
+  const [dataMode, setDataModeState] = useState<DataMode>(INITIAL_MODE);
   const [zones, setZones] = useState<Zone[]>([]);
   const [citizenReports, setCitizenReports] = useState<CitizenReport[]>([]);
   const [externalSignals, setExternalSignals] = useState<ExternalSignal[]>([]);
   const [availableTeams, setAvailableTeams] = useState(8);
   const [engineOutput, setEngineOutput] = useState<EngineOutput | null>(null);
 
+  const capabilities = getCapabilities();
+
+  // Track the mode that is currently being loaded so stale async loads can be
+  // discarded (prevents data from one mode leaking into another after a switch).
+  const activeModeRef = useRef<DataMode>(INITIAL_MODE);
+
   // Re-run engine whenever raw data or availableTeams changes
   const recomputeEngine = useCallback(
-    (z: Zone[], cr: CitizenReport[], es: ExternalSignal[], teams: number) => {
+    (z: Zone[], cr: CitizenReport[], es: ExternalSignal[], teams: number): EngineOutput => {
       const inputs: EngineInputs = {
         zones: z,
         citizenReports: cr,
@@ -159,46 +201,104 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       const output = runEngine(inputs);
       setEngineOutput(output);
+      return output;
     },
     [],
   );
 
-  // Load raw data from service layer, then re-run engine
-  const loadData = useCallback(async () => {
+  // Load the dataset for a given mode, then re-run the engine.
+  const loadDataForMode = useCallback(async (mode: DataMode) => {
+    activeModeRef.current = mode;
     setLoading(true);
     try {
       const [z, cr, es] = await Promise.all([
         fetchZones(),
-        fetchCitizenReports(50),
-        fetchExternalSignals(30),
+        fetchCitizenReports(mode, 50),
+        fetchExternalSignals(mode, 30),
       ]);
+      // Discard if the user switched modes again mid-load
+      if (activeModeRef.current !== mode) return;
       setZones(z);
       setCitizenReports(cr);
       setExternalSignals(es);
       recomputeEngine(z, cr, es, availableTeams);
       setLastRefresh(new Date());
     } finally {
-      setLoading(false);
+      if (activeModeRef.current === mode) setLoading(false);
     }
   }, [availableTeams, recomputeEngine]);
 
-  // Fetch live weather + news, merge with current signals, re-run engine
+  // Manual refresh of the current mode's dataset
+  const refresh = useCallback(() => loadDataForMode(dataMode), [dataMode, loadDataForMode]);
+
+  // Switch modes: clear state to avoid cross-mode leakage, persist, reload.
+  const setDataMode = useCallback(async (mode: DataMode) => {
+    if (mode === activeModeRef.current && !loading) {
+      // Already on this mode — still allow a reload
+    }
+    storeDataMode(mode);
+    setDataModeState(mode);
+    // Clear derived + raw state so the UI never shows stale cross-mode data
+    setEngineOutput(null);
+    setCitizenReports([]);
+    setExternalSignals([]);
+    setLastIngestResult(null);
+    await loadDataForMode(mode);
+  }, [loading, loadDataForMode]);
+
+  const resetDataMode = useCallback(async () => {
+    clearStoredDataMode();
+    await setDataMode(DEFAULT_DATA_MODE);
+  }, [setDataMode]);
+
+  // Fetch live weather + news, merge, re-run engine, persist to live dataset.
   const ingestAndRefresh = useCallback(async (): Promise<IngestResult> => {
+    // Ingestion only applies to the live dataset; demo stays presentation-safe.
+    if (dataMode !== 'live') {
+      const noop: IngestResult = {
+        signals: externalSignals, newSignalCount: 0, persisted: false,
+        errors: ['Ingestion is only available in Live mode.'],
+        ingestedAt: new Date().toISOString(),
+        weather: { signals: [], snapshots: [], source: 'fallback' },
+        news:    { signals: [], articles: 0, matched: 0, source: 'fallback' },
+      };
+      setLastIngestResult(noop);
+      return noop;
+    }
+
     setIngesting(true);
     try {
       const result = await ingestExternalSignals(zones, externalSignals);
       setExternalSignals(result.signals);
-      recomputeEngine(zones, citizenReports, result.signals, availableTeams);
+      const output = recomputeEngine(zones, citizenReports, result.signals, availableTeams);
       setLastRefresh(new Date());
       setLastIngestResult(result);
+      setLastLiveIngestAt(result.ingestedAt);
+
+      // Persist the freshly computed live engine output (best-effort).
+      persistLiveEngineOutput({
+        riskScores:      output.riskScores,
+        recommendations: output.recommendations,
+        failureChains:   output.failureChains,
+        teamAllocations: output.teamAllocations,
+      }).catch(() => {});
+
       return result;
     } finally {
       setIngesting(false);
     }
-  }, [zones, citizenReports, externalSignals, availableTeams, recomputeEngine]);
+  }, [dataMode, zones, citizenReports, externalSignals, availableTeams, recomputeEngine]);
+
+  // Wipe all live dataset rows, then reload (stays in current mode).
+  const resetLiveData = useCallback(async () => {
+    await resetLiveDataset().catch(() => {});
+    setLastLiveIngestAt(null);
+    setLastIngestResult(null);
+    await loadDataForMode(dataMode);
+  }, [dataMode, loadDataForMode]);
 
   // Initial load
-  useEffect(() => { loadData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadDataForMode(INITIAL_MODE); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-run engine when availableTeams changes (without re-fetching)
   useEffect(() => {
@@ -207,7 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [availableTeams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Submit a citizen report: persist to Supabase (best-effort) + update local state
+  // Submit a citizen report: update local state + persist to live dataset.
   const submitReport = useCallback(
     async (report: CitizenReportInsert): Promise<{ success: boolean; error?: string }> => {
       // Optimistically add to local state for immediate UI feedback
@@ -217,6 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         source: 'citizen',
         status: 'pending',
         created_at: new Date().toISOString(),
+        dataset_type: dataMode,
       };
 
       const updatedReports = [newReport, ...citizenReports];
@@ -225,17 +326,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Re-run engine with new report included
       recomputeEngine(zones, updatedReports, externalSignals, availableTeams);
 
-      // Persist to Supabase in background (non-blocking)
-      persistReport(report).catch(() => {
-        // Supabase persistence failure is non-fatal in MVP
+      // Persist to the live dataset only (demo stays stable). Non-blocking.
+      persistReport(dataMode, report).catch(() => {
+        // Persistence failure is non-fatal — report is already in app state
       });
 
       return { success: true };
     },
-    [zones, citizenReports, externalSignals, availableTeams, recomputeEngine],
+    [dataMode, zones, citizenReports, externalSignals, availableTeams, recomputeEngine],
   );
 
-  // Optimistic recommendation status update
+  // Optimistic recommendation status update (+ persist for live dataset)
   const updateRecommendationStatus = useCallback(
     (id: string, status: Recommendation['status']) => {
       if (!engineOutput) return;
@@ -243,8 +344,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         r.id === id ? { ...r, status } : r
       );
       setEngineOutput(prev => prev ? { ...prev, recommendations: updatedRecs } : prev);
+      persistRecStatus(dataMode, id, status).catch(() => {});
     },
-    [engineOutput],
+    [engineOutput, dataMode],
   );
 
   // Derived selectors
@@ -273,9 +375,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ingesting,
     lastRefresh,
     lastIngestResult,
-    dataMode:            DATA_MODE,
-    dataModeLabel:       DATA_MODE_LABELS[DATA_MODE],
-    dataModeDescription: DATA_MODE_DESCRIPTIONS[DATA_MODE],
+    lastLiveIngestAt,
+    dataMode,
+    dataModeLabel:       DATA_MODE_LABELS[dataMode],
+    dataModeDescription: DATA_MODE_DESCRIPTIONS[dataMode],
+    capabilities,
     zones,
     citizenReports,
     externalSignals,
@@ -289,7 +393,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     riskTrend:         engineOutput?.riskTrend ?? [],
     signalTrend:       engineOutput?.signalTrend ?? [],
     availableTeams,
-    refresh:                    loadData,
+    refresh,
+    setDataMode,
+    resetDataMode,
+    resetLiveData,
     ingestAndRefresh,
     setAvailableTeams,
     submitReport,

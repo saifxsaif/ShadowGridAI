@@ -1,6 +1,6 @@
 -- ShadowGrid AI — Core Schema
 
--- Zones
+-- Zones (shared city infrastructure — NOT dataset-scoped)
 CREATE TABLE zones (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -18,6 +18,10 @@ CREATE TABLE zones (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Dataset separation: every dynamic record below carries a dataset_type of
+-- 'demo' (stable seeded presentation data) or 'live' (real ingested data).
+-- Zones are shared and intentionally excluded.
+
 -- Risk Scores
 CREATE TABLE risk_scores (
   id TEXT PRIMARY KEY,
@@ -31,11 +35,13 @@ CREATE TABLE risk_scores (
   historical_component INTEGER NOT NULL DEFAULT 0,
   propagation_component INTEGER NOT NULL DEFAULT 0,
   explanation TEXT NOT NULL DEFAULT '',
+  dataset_type TEXT NOT NULL DEFAULT 'demo' CHECK (dataset_type IN ('demo','live')),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_risk_scores_zone_id ON risk_scores(zone_id);
 CREATE INDEX idx_risk_scores_category ON risk_scores(category);
+CREATE INDEX idx_risk_scores_dataset ON risk_scores(dataset_type);
 
 -- Citizen Reports
 CREATE TABLE citizen_reports (
@@ -48,11 +54,13 @@ CREATE TABLE citizen_reports (
   contact_info TEXT,
   source TEXT NOT NULL DEFAULT 'citizen',
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','acknowledged','resolved')),
+  dataset_type TEXT NOT NULL DEFAULT 'demo' CHECK (dataset_type IN ('demo','live')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_citizen_reports_zone_id ON citizen_reports(zone_id);
 CREATE INDEX idx_citizen_reports_created_at ON citizen_reports(created_at DESC);
+CREATE INDEX idx_citizen_reports_dataset ON citizen_reports(dataset_type);
 
 -- External Signals
 CREATE TABLE external_signals (
@@ -66,11 +74,13 @@ CREATE TABLE external_signals (
   title TEXT NOT NULL,
   summary TEXT NOT NULL,
   raw_payload JSONB,
+  dataset_type TEXT NOT NULL DEFAULT 'demo' CHECK (dataset_type IN ('demo','live')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_external_signals_zone_id ON external_signals(zone_id);
 CREATE INDEX idx_external_signals_created_at ON external_signals(created_at DESC);
+CREATE INDEX idx_external_signals_dataset ON external_signals(dataset_type);
 
 -- Recommendations
 CREATE TABLE recommendations (
@@ -84,11 +94,13 @@ CREATE TABLE recommendations (
   urgency TEXT NOT NULL DEFAULT 'scheduled' CHECK (urgency IN ('immediate','urgent','scheduled')),
   expected_impact_reduction INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_progress','completed')),
+  dataset_type TEXT NOT NULL DEFAULT 'demo' CHECK (dataset_type IN ('demo','live')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_recommendations_zone_id ON recommendations(zone_id);
 CREATE INDEX idx_recommendations_priority ON recommendations(priority ASC);
+CREATE INDEX idx_recommendations_dataset ON recommendations(dataset_type);
 
 -- Failure Chains
 CREATE TABLE failure_chains (
@@ -99,8 +111,11 @@ CREATE TABLE failure_chains (
   steps JSONB NOT NULL DEFAULT '[]',
   overall_risk_level TEXT NOT NULL DEFAULT 'medium' CHECK (overall_risk_level IN ('critical','high','medium','low','normal')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  dataset_type TEXT NOT NULL DEFAULT 'demo' CHECK (dataset_type IN ('demo','live')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_failure_chains_dataset ON failure_chains(dataset_type);
 
 -- Team Allocations
 CREATE TABLE team_allocations (
@@ -112,12 +127,14 @@ CREATE TABLE team_allocations (
   expected_risk_reduction INTEGER NOT NULL DEFAULT 0,
   deployment_notes TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','deployed','completed')),
+  dataset_type TEXT NOT NULL DEFAULT 'demo' CHECK (dataset_type IN ('demo','live')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_team_allocations_zone_id ON team_allocations(zone_id);
+CREATE INDEX idx_team_allocations_dataset ON team_allocations(dataset_type);
 
--- Enable RLS (public read for demo; citizen reports writable by anyone)
+-- Enable RLS
 ALTER TABLE zones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE risk_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE citizen_reports ENABLE ROW LEVEL SECURITY;
@@ -126,7 +143,7 @@ ALTER TABLE recommendations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE failure_chains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_allocations ENABLE ROW LEVEL SECURITY;
 
--- Public read policies
+-- Public read policies (both datasets are readable; the app filters by dataset_type)
 CREATE POLICY "public_read_zones" ON zones FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "public_read_risk_scores" ON risk_scores FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "public_read_citizen_reports" ON citizen_reports FOR SELECT TO anon, authenticated USING (true);
@@ -135,5 +152,8 @@ CREATE POLICY "public_read_recommendations" ON recommendations FOR SELECT TO ano
 CREATE POLICY "public_read_failure_chains" ON failure_chains FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "public_read_team_allocations" ON team_allocations FOR SELECT TO anon, authenticated USING (true);
 
--- Citizens can insert reports
-CREATE POLICY "public_insert_citizen_reports" ON citizen_reports FOR INSERT TO anon, authenticated WITH CHECK (true);
+-- Write policies — anon/authenticated may ONLY write rows where dataset_type='live'.
+-- This keeps the demo dataset stable and presentation-safe (cannot be mutated
+-- from the browser). See migration 00003 for the full set across all tables.
+CREATE POLICY "write_live_citizen_reports_insert" ON citizen_reports
+  FOR INSERT TO anon, authenticated WITH CHECK (dataset_type = 'live');

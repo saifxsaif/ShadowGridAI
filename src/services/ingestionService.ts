@@ -4,15 +4,17 @@
 //   1. Weather  → Open-Meteo (free, no key)
 //   2. News     → NewsAPI (free tier, key optional)
 //
+// Ingestion ONLY runs for the LIVE dataset. All produced signals are tagged
+// dataset_type='live' and persisted via livePersistence (demo rows untouched).
+//
 // The orchestrator:
 //   - Runs both ingestions in parallel
-//   - Merges live + existing signals (deduplicates by id prefix)
-//   - Persists new signals to Supabase when available
+//   - Merges new live signals with existing live signals (deduplicated)
+//   - Persists new signals to the live dataset when Supabase is configured
 //   - Always returns signals safe for passing to runEngine()
 //
-// Entry points:
+// Entry point:
 //   ingestExternalSignals(zones, existing) → IngestResult
-//   persistSignalsToSupabase(signals)       → void (best-effort)
 //
 // TODO: Add sensor/IoT ingestion module
 // TODO: Support scheduled execution (cron/edge function trigger)
@@ -20,8 +22,7 @@
 import type { Zone, ExternalSignal } from '@/types/types';
 import { ingestWeatherSignals, type WeatherIngestionResult } from './weatherService';
 import { ingestNewsSignals, type NewsIngestionResult } from './newsService';
-import { supabase } from '@/db/supabase';
-import { DATA_MODE } from '@/lib/appConfig';
+import { persistLiveSignals } from './livePersistence';
 
 // ─── Result shape ─────────────────────────────────────────────────────────────
 
@@ -72,44 +73,15 @@ function deduplicateSignals(incoming: ExternalSignal[], existing: ExternalSignal
   );
 }
 
-// ─── Supabase persistence ─────────────────────────────────────────────────────
-
-export async function persistSignalsToSupabase(signals: ExternalSignal[]): Promise<void> {
-  if (DATA_MODE === 'mock' || signals.length === 0) return;
-
-  // Upsert in batches of 20
-  const BATCH = 20;
-  for (let i = 0; i < signals.length; i += BATCH) {
-    const batch = signals.slice(i, i + BATCH);
-    const rows = batch.map(s => ({
-      id:                s.id,
-      signal_type:       s.signal_type,
-      zone_id:           s.zone_id,
-      source:            s.source,
-      severity:          s.severity,
-      confidence:        s.confidence,
-      detected_keywords: s.detected_keywords,
-      title:             s.title,
-      summary:           s.summary,
-      raw_payload:       s.raw_payload ?? null,
-      created_at:        s.created_at,
-    }));
-    // Best-effort — ignore conflicts (same id = already stored)
-    const upsertResult = await supabase.from('external_signals').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
-    if (upsertResult.error) {
-      // Non-fatal — ingestion data is already live in app state
-    }
-  }
-}
-
 // ─── Main orchestrator ────────────────────────────────────────────────────────
 
 /**
  * Runs all external ingestion sources in parallel and returns a merged set
- * of ExternalSignals safe for feeding into the scoring engine.
+ * of ExternalSignals (tagged dataset_type='live') safe for feeding into the
+ * scoring engine. New live signals are persisted to the live dataset.
  *
  * @param zones          All city zones (for proximity matching)
- * @param existingSignals Currently held signals (from AppContext state)
+ * @param existingSignals Currently held live signals (from AppContext state)
  */
 export async function ingestExternalSignals(
   zones: Zone[],
@@ -135,13 +107,15 @@ export async function ingestExternalSignals(
   if (weatherResult.error) errors.push(`Weather: ${weatherResult.error}`);
   if (newsResult.error)    errors.push(`News: ${newsResult.error}`);
 
-  const newSignals = [...weatherResult.signals, ...newsResult.signals];
-  const merged     = deduplicateSignals(newSignals, existingSignals);
+  // Tag every produced signal as belonging to the live dataset
+  const newSignals: ExternalSignal[] = [...weatherResult.signals, ...newsResult.signals]
+    .map(s => ({ ...s, dataset_type: 'live' as const }));
+  const merged = deduplicateSignals(newSignals, existingSignals);
 
-  // Persist new live signals to Supabase (best-effort, non-blocking)
-  const hasLiveSignals = newSignals.some(s => s.source !== 'seeded');
-  if (hasLiveSignals) {
-    persistSignalsToSupabase(newSignals).catch(() => {});
+  // Persist new live signals to the live dataset (best-effort, non-blocking)
+  const hasNewSignals = newSignals.length > 0;
+  if (hasNewSignals) {
+    persistLiveSignals(newSignals).catch(() => {});
   }
 
   return {
@@ -149,7 +123,7 @@ export async function ingestExternalSignals(
     newSignalCount: newSignals.length,
     weather:        weatherResult,
     news:           newsResult,
-    persisted:      hasLiveSignals,
+    persisted:      hasNewSignals,
     errors,
     ingestedAt,
   };

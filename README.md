@@ -49,7 +49,7 @@ All risk scores are fully explainable — no black box.
 | 📈 **Analytics Dashboard** | Trend charts, zone comparisons, signal counts, category distributions |
 | 📝 **Citizen Report Form** | Real-time submission that re-triggers the risk engine instantly |
 | 🔧 **Operations Center** | Team allocation planner, signal inspector, and ingestion control panel |
-| 🌓 **Three Data Modes** | Mock (seeded demo), Hybrid (Supabase + seeded signals), Live (full APIs) |
+| 🌓 **Two Runtime Data Modes** | Demo (stable DB-backed seed) and Live (real ingested, DB-backed) — switchable at runtime |
 
 ---
 
@@ -106,11 +106,16 @@ All risk scores are fully explainable — no black box.
 
 ### Data Modes
 
-| Mode | Condition | Behaviour |
+ShadowGrid has **two runtime data modes**, both backed by the database and switchable from the UI (sidebar or Operations Center) without restarting or changing env vars. The choice is saved in `localStorage`, and the app always **starts in Demo mode**.
+
+| Mode | Source | Behaviour |
 |---|---|---|
-| **Mock** | No Supabase keys | Seeded demo data only — works fully offline |
-| **Hybrid** | Supabase keys, no News API | Persists to Supabase + Open-Meteo weather |
-| **Live** | All keys set | Full persistence + Open-Meteo + NewsAPI |
+| **Demo** (default) | `dataset_type='demo'` rows in the DB | Stable, deterministic, presentation-safe. Immutable from the browser (RLS-protected). Works even if external APIs are offline. |
+| **Live** | `dataset_type='live'` rows in the DB | Real ingested data. Open-Meteo weather + NewsAPI news are normalised, stored as live rows, and scored over time. Grows with each ingest. |
+
+Dataset separation is enforced at the database level: every dynamic table carries a `dataset_type` column, and row-level security only permits the browser to write `live` rows — so Demo data can never be mutated or overwritten by ingestion.
+
+When Supabase is not configured, Demo mode falls back to in-memory seeded constants so the app still runs fully offline; Live mode shows whatever live rows exist (empty until ingested).
 
 ---
 
@@ -128,7 +133,7 @@ All risk scores are fully explainable — no black box.
 
 > 🔗 **Live Demo**: _(add Vercel URL after deployment)_
 
-The demo runs in **Mock mode** — no API keys required. All 7 city zones of the fictional city of **Metroville** are pre-seeded with realistic risk data.
+The demo runs in **Demo mode** — no API keys required. All 7 city zones of the fictional city of **Metroville** are pre-seeded with realistic risk data. Flip to **Live mode** from the sidebar or Operations Center to ingest and store real weather/news signals.
 
 ---
 
@@ -150,25 +155,35 @@ pnpm dev
 # → http://localhost:5173
 ```
 
-The app runs in **Mock mode** with no `.env` changes needed.
+The app runs in **Demo mode** with no `.env` changes needed.
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values you want.
+Copy `.env.example` to `.env` and fill in the values you want. **Env vars do not select the data mode** — they only describe which backends are available. The Demo/Live mode is chosen at runtime in the UI (see below).
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `VITE_SUPABASE_URL` | Optional | — | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Optional | — | Supabase anon/public key |
-| `VITE_NEWS_API_KEY` | Optional | — | [newsapi.org](https://newsapi.org) free key |
+| `VITE_NEWS_API_KEY` | Optional | — | [newsapi.org](https://newsapi.org) free key (enables live news ingestion) |
 | `VITE_NEWS_API_PROXY_URL` | Optional | — | Proxy URL for NewsAPI (avoids browser CORS) |
 | `VITE_OPEN_METEO_BASE_URL` | Optional | `https://api.open-meteo.com/v1` | Override for tests/CI |
-| `VITE_DEMO_CITY` | Optional | `Metroville` | City name for API queries |
-| `VITE_APP_ID` | Optional | `shadowgrid-ai` | Application identifier |
+| `VITE_DEMO_CITY` | Optional | `Metroville` | City name for live weather/news queries |
 
 > ⚠️ **Never commit `.env`** — it is in `.gitignore` by default.
+
+---
+
+## Runtime Data Mode Switcher
+
+The active dataset is chosen **in the app**, not via env vars:
+
+- A **Demo / Live** toggle lives in the sidebar (compact) and in the **Operations Center** (full control with description, last-ingest time, and a *Clear Live Dataset* action).
+- The selection is persisted in `localStorage` (`shadowgrid.dataMode`), so a refresh keeps your choice. The app **defaults to Demo** and a *Reset to Demo* action clears the preference.
+- Switching modes clears in-memory state and reloads the matching dataset from the DB, then re-runs the scoring engine — no stale cross-mode data.
+- **Ingestion (weather + news) only runs in Live mode.** It writes `dataset_type='live'` rows; the Demo dataset is never touched.
 
 ---
 
@@ -179,13 +194,17 @@ Copy `.env.example` to `.env` and fill in the values you want.
 - Go to [app.supabase.com](https://app.supabase.com) → **New Project**
 - Copy **Project URL** and **anon public key** into `.env`
 
-### 2. Apply the schema migration
+### 2. Apply the schema migrations
 
-Open the **SQL Editor** in your Supabase project and run the full contents of:
+Open the **SQL Editor** in your Supabase project and run, in order, the full contents of:
 
 ```
-supabase/migrations/00001_create_shadowgrid_schema.sql
+supabase/migrations/00001_create_shadowgrid_schema.sql   -- tables + dataset_type + read/insert policies
+supabase/migrations/00002_add_dataset_type.sql           -- idempotent guard (no-op on a fresh 00001)
+supabase/migrations/00003_live_delete_policies.sql       -- live-only insert/update/delete RLS
 ```
+
+> `00001` already includes the `dataset_type` columns, so `00002` is a safe no-op when starting fresh. It exists for databases created before dataset separation was added.
 
 ### 3. Seed the database
 
@@ -228,7 +247,7 @@ pnpm preview      # Preview production build locally
 pnpm lint         # TypeScript type check + Biome lint
 ```
 
-No internet connection required in Mock mode.
+No internet connection required in Demo mode.
 
 ---
 
@@ -308,14 +327,14 @@ Steps:
 - [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` added to `.env`
 - [ ] Schema migration applied via SQL editor
 - [ ] Seed SQL applied via SQL editor
-- [ ] App reloads — sidebar shows "Hybrid" or "Live" badge
+- [ ] App reloads — sidebar shows the **Demo / Live** switcher and mode badge
 
 ### Vercel deployment
 - [ ] Repo pushed to GitHub/GitLab
 - [ ] Project imported at vercel.com/new
 - [ ] Env vars added in Vercel dashboard
 - [ ] Deploy succeeds — check build logs
-- [ ] App loads at Vercel URL in Mock mode (no keys) or Live mode (keys set)
+- [ ] App loads at Vercel URL in Demo mode by default; switch to Live mode in-app
 
 ### Hackathon submission
 - [ ] Demo URL recorded

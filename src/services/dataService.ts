@@ -1,8 +1,19 @@
-// ShadowGrid AI — Supabase service layer
-// All data access functions. Falls back to mock data if Supabase is unavailable.
+// ShadowGrid AI — Supabase service layer (dataset-aware)
+//
+// Every read/write is scoped to a DatasetType ('demo' | 'live'):
+//   • demo — the stable seeded dataset (dataset_type='demo')
+//   • live — the live, ingested dataset (dataset_type='live')
+//
+// Zones are shared city infrastructure and are NOT dataset-scoped.
+//
+// Fallback strategy:
+//   • If Supabase is NOT configured, demo reads return seeded mock constants
+//     (so the app still works fully offline). Live reads return empty arrays.
+//   • If Supabase IS configured but a demo query returns nothing, we fall back
+//     to seeded mock data so the demo is never blank.
 
 import { supabase } from '@/db/supabase';
-import { DATA_MODE } from '@/lib/appConfig';
+import { SUPABASE_CONFIGURED } from '@/lib/appConfig';
 import type {
   Zone,
   RiskScore,
@@ -12,6 +23,7 @@ import type {
   Recommendation,
   FailureChain,
   TeamAllocation,
+  DatasetType,
 } from '@/types/types';
 import {
   DEMO_ZONES,
@@ -23,25 +35,29 @@ import {
   DEMO_TEAM_ALLOCATIONS,
 } from '@/lib/mockData';
 
-// ─── Zones ─────────────────────────────────────────────────────────────────────
+// Seeded fallbacks are only ever used for the demo dataset.
+function demoFallback<T>(dataset: DatasetType, rows: T[]): T[] {
+  return dataset === 'demo' ? rows : [];
+}
+
+// ─── Zones (shared, not dataset-scoped) ─────────────────────────────────────────
 
 export async function fetchZones(): Promise<Zone[]> {
-  if (DATA_MODE === 'mock') return DEMO_ZONES;
+  if (!SUPABASE_CONFIGURED) return DEMO_ZONES;
   try {
     const { data, error } = await supabase
       .from('zones')
       .select('*')
       .order('name');
     if (error) throw error;
-    return Array.isArray(data) ? data : DEMO_ZONES;
+    return Array.isArray(data) && data.length > 0 ? data : DEMO_ZONES;
   } catch {
-    // TODO: Add error logging/monitoring
     return DEMO_ZONES;
   }
 }
 
 export async function fetchZoneById(id: string): Promise<Zone | null> {
-  if (DATA_MODE === 'mock') return DEMO_ZONES.find(z => z.id === id) ?? null;
+  if (!SUPABASE_CONFIGURED) return DEMO_ZONES.find(z => z.id === id) ?? null;
   try {
     const { data, error } = await supabase
       .from('zones')
@@ -57,45 +73,49 @@ export async function fetchZoneById(id: string): Promise<Zone | null> {
 
 // ─── Risk Scores ───────────────────────────────────────────────────────────────
 
-export async function fetchRiskScores(zoneId?: string): Promise<RiskScore[]> {
-  if (DATA_MODE === 'mock') {
-    return zoneId ? DEMO_RISK_SCORES.filter(r => r.zone_id === zoneId) : DEMO_RISK_SCORES;
-  }
+export async function fetchRiskScores(dataset: DatasetType, zoneId?: string): Promise<RiskScore[]> {
+  const fallback = () =>
+    demoFallback(dataset, zoneId ? DEMO_RISK_SCORES.filter(r => r.zone_id === zoneId) : DEMO_RISK_SCORES);
+  if (!SUPABASE_CONFIGURED) return fallback();
   try {
-    let query = supabase.from('risk_scores').select('*').order('score', { ascending: false });
+    let query = supabase.from('risk_scores').select('*')
+      .eq('dataset_type', dataset)
+      .order('score', { ascending: false });
     if (zoneId) query = query.eq('zone_id', zoneId);
     const { data, error } = await query;
     if (error) throw error;
     const results = Array.isArray(data) ? data : [];
-    if (results.length === 0) {
-      return zoneId ? DEMO_RISK_SCORES.filter(r => r.zone_id === zoneId) : DEMO_RISK_SCORES;
-    }
-    return results;
+    return results.length > 0 ? results : fallback();
   } catch {
-    return zoneId ? DEMO_RISK_SCORES.filter(r => r.zone_id === zoneId) : DEMO_RISK_SCORES;
+    return fallback();
   }
 }
 
 // ─── Citizen Reports ──────────────────────────────────────────────────────────
 
-export async function fetchCitizenReports(limit = 20): Promise<CitizenReport[]> {
-  if (DATA_MODE === 'mock') return DEMO_CITIZEN_REPORTS.slice(0, limit);
+export async function fetchCitizenReports(dataset: DatasetType, limit = 20): Promise<CitizenReport[]> {
+  if (!SUPABASE_CONFIGURED) return demoFallback(dataset, DEMO_CITIZEN_REPORTS).slice(0, limit);
   try {
     const { data, error } = await supabase
       .from('citizen_reports')
       .select('*')
+      .eq('dataset_type', dataset)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) throw error;
     const results = Array.isArray(data) ? data : [];
-    return results.length > 0 ? results : DEMO_CITIZEN_REPORTS;
+    return results.length > 0 ? results : demoFallback(dataset, DEMO_CITIZEN_REPORTS);
   } catch {
-    return DEMO_CITIZEN_REPORTS;
+    return demoFallback(dataset, DEMO_CITIZEN_REPORTS);
   }
 }
 
-export async function submitCitizenReport(report: CitizenReportInsert): Promise<{ success: boolean; error?: string }> {
-  if (DATA_MODE === 'mock') return { success: true };
+export async function submitCitizenReport(
+  dataset: DatasetType,
+  report: CitizenReportInsert,
+): Promise<{ success: boolean; error?: string }> {
+  // Demo dataset is read-only/presentation-safe — never persist into it.
+  if (!SUPABASE_CONFIGURED || dataset === 'demo') return { success: true };
   try {
     const { error } = await supabase
       .from('citizen_reports')
@@ -108,6 +128,7 @@ export async function submitCitizenReport(report: CitizenReportInsert): Promise<
         contact_info: report.contact_info || null,
         source: 'citizen',
         status: 'pending',
+        dataset_type: 'live',
       });
     if (error) throw error;
     return { success: true };
@@ -119,53 +140,56 @@ export async function submitCitizenReport(report: CitizenReportInsert): Promise<
 
 // ─── External Signals ─────────────────────────────────────────────────────────
 
-export async function fetchExternalSignals(limit = 20): Promise<ExternalSignal[]> {
-  if (DATA_MODE === 'mock') return DEMO_EXTERNAL_SIGNALS.slice(0, limit);
+export async function fetchExternalSignals(dataset: DatasetType, limit = 20): Promise<ExternalSignal[]> {
+  if (!SUPABASE_CONFIGURED) return demoFallback(dataset, DEMO_EXTERNAL_SIGNALS).slice(0, limit);
   try {
     const { data, error } = await supabase
       .from('external_signals')
       .select('*')
+      .eq('dataset_type', dataset)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) throw error;
     const results = Array.isArray(data) ? data : [];
-    return results.length > 0 ? results : DEMO_EXTERNAL_SIGNALS;
+    return results.length > 0 ? results : demoFallback(dataset, DEMO_EXTERNAL_SIGNALS);
   } catch {
-    return DEMO_EXTERNAL_SIGNALS;
+    return demoFallback(dataset, DEMO_EXTERNAL_SIGNALS);
   }
 }
 
 // ─── Recommendations ──────────────────────────────────────────────────────────
 
-export async function fetchRecommendations(zoneId?: string): Promise<Recommendation[]> {
-  if (DATA_MODE === 'mock') {
-    return zoneId ? DEMO_RECOMMENDATIONS.filter(r => r.zone_id === zoneId) : DEMO_RECOMMENDATIONS;
-  }
+export async function fetchRecommendations(dataset: DatasetType, zoneId?: string): Promise<Recommendation[]> {
+  const fallback = () =>
+    demoFallback(dataset, zoneId ? DEMO_RECOMMENDATIONS.filter(r => r.zone_id === zoneId) : DEMO_RECOMMENDATIONS);
+  if (!SUPABASE_CONFIGURED) return fallback();
   try {
-    let query = supabase.from('recommendations').select('*').order('priority', { ascending: true });
+    let query = supabase.from('recommendations').select('*')
+      .eq('dataset_type', dataset)
+      .order('priority', { ascending: true });
     if (zoneId) query = query.eq('zone_id', zoneId);
     const { data, error } = await query;
     if (error) throw error;
     const results = Array.isArray(data) ? data : [];
-    if (results.length === 0) {
-      return zoneId ? DEMO_RECOMMENDATIONS.filter(r => r.zone_id === zoneId) : DEMO_RECOMMENDATIONS;
-    }
-    return results;
+    return results.length > 0 ? results : fallback();
   } catch {
-    return zoneId ? DEMO_RECOMMENDATIONS.filter(r => r.zone_id === zoneId) : DEMO_RECOMMENDATIONS;
+    return fallback();
   }
 }
 
 export async function updateRecommendationStatus(
+  dataset: DatasetType,
   id: string,
   status: Recommendation['status']
 ): Promise<boolean> {
-  if (DATA_MODE === 'mock') return true;
+  // Demo recommendations are not persisted; updates are local-only.
+  if (!SUPABASE_CONFIGURED || dataset === 'demo') return true;
   try {
     const { error } = await supabase
       .from('recommendations')
       .update({ status })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('dataset_type', 'live');
     if (error) throw error;
     return true;
   } catch {
@@ -175,45 +199,50 @@ export async function updateRecommendationStatus(
 
 // ─── Failure Chains ───────────────────────────────────────────────────────────
 
-export async function fetchFailureChains(): Promise<FailureChain[]> {
-  if (DATA_MODE === 'mock') return DEMO_FAILURE_CHAINS;
+export async function fetchFailureChains(dataset: DatasetType): Promise<FailureChain[]> {
+  if (!SUPABASE_CONFIGURED) return demoFallback(dataset, DEMO_FAILURE_CHAINS);
   try {
     const { data, error } = await supabase
       .from('failure_chains')
       .select('*')
+      .eq('dataset_type', dataset)
       .eq('is_active', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     const results = Array.isArray(data) ? data : [];
-    return results.length > 0 ? results : DEMO_FAILURE_CHAINS;
+    return results.length > 0 ? results : demoFallback(dataset, DEMO_FAILURE_CHAINS);
   } catch {
-    return DEMO_FAILURE_CHAINS;
+    return demoFallback(dataset, DEMO_FAILURE_CHAINS);
   }
 }
 
 // ─── Team Allocations ─────────────────────────────────────────────────────────
 
-export async function fetchTeamAllocations(): Promise<TeamAllocation[]> {
-  if (DATA_MODE === 'mock') return DEMO_TEAM_ALLOCATIONS;
+export async function fetchTeamAllocations(dataset: DatasetType): Promise<TeamAllocation[]> {
+  if (!SUPABASE_CONFIGURED) return demoFallback(dataset, DEMO_TEAM_ALLOCATIONS);
   try {
     const { data, error } = await supabase
       .from('team_allocations')
       .select('*')
+      .eq('dataset_type', dataset)
       .order('priority_rank', { ascending: true });
     if (error) throw error;
     const results = Array.isArray(data) ? data : [];
-    return results.length > 0 ? results : DEMO_TEAM_ALLOCATIONS;
+    return results.length > 0 ? results : demoFallback(dataset, DEMO_TEAM_ALLOCATIONS);
   } catch {
-    return DEMO_TEAM_ALLOCATIONS;
+    return demoFallback(dataset, DEMO_TEAM_ALLOCATIONS);
   }
 }
 
 export async function upsertTeamAllocation(
+  dataset: DatasetType,
   allocation: Omit<TeamAllocation, 'id' | 'created_at'>
 ): Promise<boolean> {
-  if (DATA_MODE === 'mock') return true;
+  if (!SUPABASE_CONFIGURED || dataset === 'demo') return true;
   try {
-    const { error } = await supabase.from('team_allocations').insert(allocation);
+    const { error } = await supabase
+      .from('team_allocations')
+      .insert({ ...allocation, dataset_type: 'live' });
     if (error) throw error;
     return true;
   } catch {
