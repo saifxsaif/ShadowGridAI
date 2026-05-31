@@ -1,0 +1,173 @@
+/* stylelint-disable */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ShadowGrid AI — Dark futuristic smart city intelligence design system */
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    /* Dark command-center theme (always dark) */
+    --background: 222 20% 11%;
+    --foreground: 210 40% 94%;
+    --card: 222 22% 14%;
+    --card-foreground: 210 40% 94%;
+    --popover: 222 22% 16%;
+    --popover-foreground: 210 40% 94%;
+    /* Electric cyan primary */
+    --primary: 191 100% 48%;
+    --primary-foreground: 222 24% 8%;
+    --secondary: 222 18% 20%;
+    --secondary-foreground: 210 40% 86%;
+    --muted: 222 18% 18%;
+    --muted-foreground: 215 16% 56%;
+    --accent: 222 18% 22%;
+    --accent-foreground: 210 40% 86%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 18% 22%;
+    --input: 222 18% 18%;
+    --ring: 191 100% 48%;
+    /* Risk severity colors */
+    --risk-critical: 0 90% 50%;
+    --risk-high: 25 95% 53%;
+    --risk-medium: 43 96% 56%;
+    --risk-low: 142 71% 45%;
+    /* Chart palette */
+    --chart-1: 191 100% 48%;
+    --chart-2: 25 95% 53%;
+    --chart-3: 0 90% 50%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 262 83% 68%;
+    /* Sidebar */
+    --sidebar-background: 222 24% 9%;
+    --sidebar-foreground: 210 40% 86%;
+    --sidebar-primary: 191 100% 48%;
+    --sidebar-primary-foreground: 222 24% 8%;
+    --sidebar-accent: 222 20% 16%;
+    --sidebar-accent-foreground: 210 40% 86%;
+    --sidebar-border: 222 18% 18%;
+    --sidebar-ring: 191 100% 48%;
+  }
+
+  /* dark class mirrors :root — always dark theme */
+  .dark {
+    --background: 222 20% 11%;
+    --foreground: 210 40% 94%;
+    --card: 222 22% 14%;
+    --card-foreground: 210 40% 94%;
+    --popover: 222 22% 16%;
+    --popover-foreground: 210 40% 94%;
+    --primary: 191 100% 48%;
+    --primary-foreground: 222 24% 8%;
+    --secondary: 222 18% 20%;
+    --secondary-foreground: 210 40% 86%;
+    --muted: 222 18% 18%;
+    --muted-foreground: 215 16% 56%;
+    --accent: 222 18% 22%;
+    --accent-foreground: 210 40% 86%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 18% 22%;
+    --input: 222 18% 18%;
+    --ring: 191 100% 48%;
+    --risk-critical: 0 90% 50%;
+    --risk-high: 25 95% 53%;
+    --risk-medium: 43 96% 56%;
+    --risk-low: 142 71% 45%;
+    --chart-1: 191 100% 48%;
+    --chart-2: 25 95% 53%;
+    --chart-3: 0 90% 50%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 262 83% 68%;
+    --sidebar-background: 222 24% 9%;
+    --sidebar-foreground: 210 40% 86%;
+    --sidebar-primary: 191 100% 48%;
+    --sidebar-primary-foreground: 222 24% 8%;
+    --sidebar-accent: 222 20% 16%;
+    --sidebar-accent-foreground: 210 40% 86%;
+    --sidebar-border: 222 18% 18%;
+    --sidebar-ring: 191 100% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Leaflet map dark theme overrides */
+.leaflet-container {
+  background: hsl(222 20% 9%) !important;
+  font-family: inherit;
+}
+
+.leaflet-tile-pane {
+  filter: brightness(0.5) saturate(0.3) hue-rotate(180deg);
+}
+
+.leaflet-control-zoom a {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip,
+.shadowgrid-popup .leaflet-popup-content-wrapper,
+.shadowgrid-popup .leaflet-popup-tip {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+}
+
+.leaflet-popup-close-button {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Risk score pulse animation */
+@keyframes risk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.risk-critical-pulse {
+  animation: risk-pulse 1.5s ease-in-out infinite;
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, hsl(191 100% 48%), hsl(262 83% 68%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Skeleton pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.6; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
