@@ -19,7 +19,7 @@
 // TODO: Add sentiment analysis layer for better severity classification.
 
 import type { Zone, ExternalSignal, SignalType, Severity } from '@/types/types';
-import { NEWS_API_KEY, NEWS_API_PROXY_URL, DEMO_CITY } from '@/lib/appConfig';
+import { NEWS_API_KEY, NEWS_API_PROXY_URL, SUPABASE_ANON_KEY, DEMO_CITY } from '@/lib/appConfig';
 import { DEMO_EXTERNAL_SIGNALS } from '@/lib/mockData';
 
 // ─── NewsAPI response shape ───────────────────────────────────────────────────
@@ -180,22 +180,43 @@ const SEARCH_QUERIES = [
   `${DEMO_CITY} traffic`,
 ];
 
+// News ingestion is possible when EITHER a proxy URL is configured (server-side
+// key, browser-safe) OR a direct NewsAPI key is present (works on localhost /
+// server runtimes only — browsers on public domains are blocked by CORS).
+const NEWS_AVAILABLE = Boolean(NEWS_API_PROXY_URL || NEWS_API_KEY);
+
+// True when the proxy points at a Supabase Edge Function, which requires the
+// anon key in the Authorization header to pass the gateway's JWT check.
+function isSupabaseFunctionUrl(url: string): boolean {
+  return /\.supabase\.co\/functions\//.test(url) || /\/functions\/v1\//.test(url);
+}
+
 async function fetchNewsArticles(query: string): Promise<NewsArticle[]> {
-  if (!NEWS_API_KEY) return [];
+  if (!NEWS_AVAILABLE) return [];
 
   const params = new URLSearchParams({
     q:        query,
     sortBy:   'publishedAt',
     pageSize: '10',
-    apiKey:   NEWS_API_KEY,
   });
 
-  // Use proxy URL when set (required for browser-side requests)
-  const baseUrl = NEWS_API_PROXY_URL
-    ? `${NEWS_API_PROXY_URL}?${params.toString()}`
-    : `https://newsapi.org/v2/everything?${params.toString()}`;
+  const headers: Record<string, string> = {};
+  let requestUrl: string;
 
-  const res = await fetch(baseUrl, { signal: AbortSignal.timeout(8000) });
+  if (NEWS_API_PROXY_URL) {
+    // Proxy holds the API key server-side — never send it from the browser.
+    requestUrl = `${NEWS_API_PROXY_URL}?${params.toString()}`;
+    if (isSupabaseFunctionUrl(NEWS_API_PROXY_URL) && SUPABASE_ANON_KEY) {
+      headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+      headers.apikey = SUPABASE_ANON_KEY;
+    }
+  } else {
+    // Direct call (localhost / server runtimes only).
+    params.set('apiKey', NEWS_API_KEY);
+    requestUrl = `https://newsapi.org/v2/everything?${params.toString()}`;
+  }
+
+  const res = await fetch(requestUrl, { headers, signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`NewsAPI HTTP ${res.status}`);
 
   const json: NewsApiResponse = await res.json();
@@ -220,7 +241,7 @@ export interface NewsIngestionResult {
 export async function ingestNewsSignals(
   zones: Zone[],
 ): Promise<NewsIngestionResult> {
-  if (!NEWS_API_KEY) {
+  if (!NEWS_AVAILABLE) {
     // Return seeded news signals as fallback
     const fallback = DEMO_EXTERNAL_SIGNALS.filter(s => s.source === 'news');
     return {
@@ -228,7 +249,7 @@ export async function ingestNewsSignals(
       articles: 0,
       matched:  fallback.length,
       source:   'fallback',
-      error:    'VITE_NEWS_API_KEY not set — using seeded signals',
+      error:    'No NewsAPI key or proxy configured — using seeded signals',
     };
   }
 

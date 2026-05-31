@@ -47,5 +47,6 @@ export const DEMO_CITY: string = env.VITE_DEMO_CITY ?? 'Metroville';
 /** True when a Supabase project URL + anon key are present. */
 export const SUPABASE_CONFIGURED: boolean = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-/** True when a NewsAPI key is present (enables live news ingestion). */
-export const NEWS_CONFIGURED: boolean = Boolean(NEWS_API_KEY);
+/** True when live news ingestion is possible — either a direct NewsAPI key
+ *  or a server-side proxy URL (Supabase Edge Function / Vercel route). */
+export const NEWS_CONFIGURED: boolean = Boolean(NEWS_API_KEY || NEWS_API_PROXY_URL);

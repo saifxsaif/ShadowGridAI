@@ -115,9 +115,33 @@ vercel
 
 ### NewsAPI Browser CORS Issue
 
-NewsAPI free tier blocks direct browser requests. For production Vercel deploys:
+NewsAPI free tier blocks direct browser requests on public domains. (Not an issue on `localhost` or in Demo mode.) For production browser deploys, route requests through a server-side proxy.
 
-**Option A: Vercel API route** (recommended for quick deploys)
+**Option A: Supabase Edge Function** (recommended — works regardless of where the frontend is hosted)
+
+This repo includes the function at `supabase/functions/news-proxy/index.ts`. It is already deployed to this project. To deploy/update it yourself and configure the key:
+
+```bash
+# 1. Deploy the function
+supabase functions deploy news-proxy
+
+# 2. Set the NewsAPI key as a server-side secret (NEVER shipped to the browser)
+supabase secrets set NEWS_API_KEY=your-newsapi-key
+```
+
+Then point the app at it:
+```
+VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-proxy
+```
+
+How it works:
+- The browser calls the function with the Supabase **anon key** in the `Authorization` header (handled automatically by `newsService.ts`).
+- The function reads `NEWS_API_KEY` from its secret, calls newsapi.org server-side, and returns the JSON with permissive CORS headers.
+- The NewsAPI key never leaves the server. Do **not** set `VITE_NEWS_API_KEY` in production browser builds when using the proxy.
+
+> ⚠️ Setting the `NEWS_API_KEY` secret requires the Supabase CLI (or Dashboard → Edge Functions → Manage secrets) — it can't be done from the app. Until the secret is set, the function returns a clear "NEWS_API_KEY secret not configured" error and the app falls back to seeded news signals.
+
+**Option B: Vercel API route** (if hosting on Vercel)
 ```
 /api/news-proxy.ts
 ```
@@ -130,10 +154,7 @@ export default async function handler(req, res) {
   res.json(data);
 }
 ```
-Set `VITE_NEWS_API_PROXY_URL=/api/news-proxy` in Vercel env vars.
-
-**Option B: Supabase Edge Function** (if you want server-side execution)
-- Create an edge function that proxies NewsAPI requests server-side.
+Set `NEWS_API_KEY` (server-side) and `VITE_NEWS_API_PROXY_URL=/api/news-proxy` in Vercel env vars.
 
 ---
 

@@ -228,13 +228,23 @@ ORDER BY table_name;
 
 ## NewsAPI Setup (Optional)
 
-1. Register for a free key at [newsapi.org](https://newsapi.org)
-2. Add to `.env`: `VITE_NEWS_API_KEY=your_key`
-3. **CORS note**: NewsAPI blocks direct browser requests in production.
-   - For Vercel: create an API route at `/api/news-proxy.ts` (see `SETUP.md`)
-   - Set `VITE_NEWS_API_PROXY_URL=/api/news-proxy`
+Register for a free key at [newsapi.org](https://newsapi.org). How you wire it depends on the environment:
 
-If no key is set, the app falls back to seeded news signals — the demo still works.
+**Local development (localhost)**
+- Add to `.env`: `VITE_NEWS_API_KEY=your_key`
+- NewsAPI allows direct browser requests from `localhost`, so no proxy is needed.
+
+**Production (public domain)**
+- NewsAPI's free tier **blocks direct browser requests** on public domains (CORS), and a `VITE_`-prefixed key is bundled into the client where anyone can read it.
+- So in production: **do not set `VITE_NEWS_API_KEY`**. Instead route through a server-side proxy that holds the key:
+  - **Supabase Edge Function** (recommended): deploy `supabase/functions/news-proxy`, set the `NEWS_API_KEY` secret, and set
+    `VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-proxy`
+  - **Vercel API route**: set `NEWS_API_KEY` (server-side, no `VITE_`) and `VITE_NEWS_API_PROXY_URL=/api/news-proxy`
+- See `SETUP.md` → *NewsAPI Browser CORS Issue* for full deploy steps.
+
+> 🔐 **Security**: any `VITE_`-prefixed variable is embedded in the client bundle and publicly visible. Keep the raw NewsAPI key server-side (proxy secret) for any public deploy. `newsService.ts` automatically omits the client key when a proxy URL is set and sends the Supabase anon key instead.
+
+If neither a key nor a proxy is configured, the app falls back to seeded news signals — Demo mode still works.
 
 ---
 
@@ -258,10 +268,13 @@ No internet connection required in Demo mode.
 ```bash
 pnpm add -g vercel
 vercel
-# Then add env vars:
+# Then add env vars (client-safe, VITE_-prefixed):
 vercel env add VITE_SUPABASE_URL
 vercel env add VITE_SUPABASE_ANON_KEY
+vercel env add VITE_NEWS_API_PROXY_URL   # → your Supabase Edge Function URL
 ```
+
+> Do **not** add `VITE_NEWS_API_KEY` to a public deploy — it would be exposed in the client bundle. Use the proxy instead (below).
 
 ### Option B — Vercel Dashboard
 
@@ -271,9 +284,22 @@ vercel env add VITE_SUPABASE_ANON_KEY
 4. Output directory: `dist`
 5. Add env vars under **Settings → Environment Variables**
 
-### NewsAPI CORS Proxy for Vercel
+### Live News in Production (CORS-safe)
 
-Create `api/news-proxy.ts` in the project root:
+The recommended path is the **Supabase Edge Function** in this repo (`supabase/functions/news-proxy`), since it works no matter where the frontend is hosted and keeps the NewsAPI key server-side:
+
+```bash
+supabase functions deploy news-proxy
+supabase secrets set NEWS_API_KEY=your-newsapi-key   # server-side only
+```
+
+Then set on the frontend host:
+```
+VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-proxy
+# (leave VITE_NEWS_API_KEY unset in production)
+```
+
+If you'd rather keep everything on Vercel, create `api/news-proxy.ts`:
 
 ```typescript
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -333,6 +359,8 @@ Steps:
 - [ ] Repo pushed to GitHub/GitLab
 - [ ] Project imported at vercel.com/new
 - [ ] Env vars added in Vercel dashboard
+- [ ] **`VITE_NEWS_API_KEY` is NOT set in production** (key would leak in the client bundle)
+- [ ] Live news routed via proxy: `VITE_NEWS_API_PROXY_URL` set + `NEWS_API_KEY` secret configured server-side
 - [ ] Deploy succeeds — check build logs
 - [ ] App loads at Vercel URL in Demo mode by default; switch to Live mode in-app
 
