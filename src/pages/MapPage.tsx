@@ -13,7 +13,6 @@ import {
   getRiskColor,
   getRiskLevel,
   RISK_LEVEL_CONFIG,
-  DEMO_CITY_CONFIG,
 } from '@/lib/constants';
 import { getCategoryColor } from '@/lib/uiHelpers';
 import type { RiskCategory, ZoneRiskSummary } from '@/types/types';
@@ -37,7 +36,7 @@ function getScoreForFilter(summary: ZoneRiskSummary, filter: FilterCategory): nu
 }
 
 export default function MapPage() {
-  const { zones, zoneSummaries, loading, refresh, ingesting, dataModeLabel } = useAppStore();
+  const { zones, zoneSummaries, loading, refresh, ingesting, dataModeLabel, cityLocation } = useAppStore();
   const [selectedZoneId, setSelectedZoneId] = useState<string | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('overall');
   const [legendVisible, setLegendVisible] = useState(true);
@@ -66,8 +65,8 @@ export default function MapPage() {
       if (!containerRef.current || mapRef.current) return;
 
       const map = L.map(containerRef.current, {
-        center: [DEMO_CITY_CONFIG.lat, DEMO_CITY_CONFIG.lng],
-        zoom: DEMO_CITY_CONFIG.zoom,
+        center: [cityLocation.lat, cityLocation.lng],
+        zoom: cityLocation.zoom,
         zoomControl: true,
         attributionControl: false,
       });
@@ -93,6 +92,12 @@ export default function MapPage() {
       }
     };
   }, []);
+
+  // Recenter when the resolved city location changes (after geocoding)
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setView([cityLocation.lat, cityLocation.lng], cityLocation.zoom);
+  }, [cityLocation.lat, cityLocation.lng, cityLocation.zoom]);
 
   // Draw / update polygons when zones or filter changes
   useEffect(() => {

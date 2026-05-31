@@ -34,6 +34,7 @@ export default function AnalyticsPage() {
     zoneSummaries,
     riskTrend,
     signalTrend,
+    cityName,
   } = useAppStore();
 
   // Category distribution computed from live zone summaries
@@ -65,7 +66,7 @@ export default function AnalyticsPage() {
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-foreground">Risk Analytics</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Historical trends, signal volumes, and zone risk distribution · Metroville
+          Historical trends, signal volumes, and zone risk distribution · {cityName}
         </p>
       </div>
 

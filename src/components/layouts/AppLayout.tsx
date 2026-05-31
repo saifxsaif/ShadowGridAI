@@ -52,7 +52,7 @@ function NavItem({
 }
 
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
-  const { lastRefresh } = useAppStore();
+  const { lastRefresh, cityName } = useAppStore();
 
   return (
     <div className="flex flex-col h-full bg-sidebar-background">
@@ -70,7 +70,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
       {/* Live indicator */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-sidebar-border">
         <Activity size={12} className="text-green-400 shrink-0" />
-        <span className="text-xs text-muted-foreground flex-1 truncate">Metroville</span>
+        <span className="text-xs text-muted-foreground flex-1 truncate">{cityName}</span>
         <span className="text-xs font-mono text-green-400 shrink-0">ACTIVE</span>
       </div>
 

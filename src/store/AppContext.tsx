@@ -43,6 +43,9 @@ import {
   persistLiveEngineOutput,
   resetLiveDataset,
 } from '@/services/livePersistence';
+import { geocodeCity, type CityLocation } from '@/services/geocodeService';
+import { DEMO_CITY } from '@/lib/appConfig';
+import { DEMO_CITY_CONFIG } from '@/lib/constants';
 import {
   type DataMode,
   DEFAULT_DATA_MODE,
@@ -70,6 +73,10 @@ export interface AppState {
   dataModeLabel: string;
   dataModeDescription: string;
   capabilities: DataModeCapabilities;
+
+  // City identity (from VITE_DEMO_CITY) — drives all city labels + map center
+  cityName: string;
+  cityLocation: CityLocation;
 
   // Raw data
   zones: Zone[];
@@ -112,6 +119,15 @@ export interface AppState {
 const EMPTY_MAP = new Map<string, ZoneExplanation>();
 const INITIAL_MODE = getStoredDataMode();
 
+// Default city location — the configured name with the seed coordinates as a
+// safe starting point until geocoding resolves the real lat/lng.
+const DEFAULT_CITY_LOCATION: CityLocation = {
+  name: DEMO_CITY,
+  lat:  DEMO_CITY_CONFIG.lat,
+  lng:  DEMO_CITY_CONFIG.lng,
+  zoom: DEMO_CITY_CONFIG.zoom,
+};
+
 const DEFAULT_SUMMARY: DashboardSummary = {
   total_active_signals: 0,
   critical_zones_count: 0,
@@ -133,6 +149,8 @@ const DEFAULT_STATE: AppState = {
   dataModeLabel: DATA_MODE_LABELS[INITIAL_MODE],
   dataModeDescription: DATA_MODE_DESCRIPTIONS[INITIAL_MODE],
   capabilities: getCapabilities(),
+  cityName: DEMO_CITY,
+  cityLocation: DEFAULT_CITY_LOCATION,
   zones: [],
   citizenReports: [],
   externalSignals: [],
@@ -183,6 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [externalSignals, setExternalSignals] = useState<ExternalSignal[]>([]);
   const [availableTeams, setAvailableTeams] = useState(8);
   const [engineOutput, setEngineOutput] = useState<EngineOutput | null>(null);
+  const [cityLocation, setCityLocation] = useState<CityLocation>(DEFAULT_CITY_LOCATION);
 
   const capabilities = getCapabilities();
 
@@ -300,6 +319,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Initial load
   useEffect(() => { loadDataForMode(INITIAL_MODE); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Resolve the configured city name → map coordinates (once on mount).
+  useEffect(() => {
+    let cancelled = false;
+    geocodeCity(DEMO_CITY, DEFAULT_CITY_LOCATION).then(loc => {
+      if (!cancelled) setCityLocation(loc);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Re-run engine when availableTeams changes (without re-fetching)
   useEffect(() => {
     if (zones.length > 0) {
@@ -380,6 +408,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dataModeLabel:       DATA_MODE_LABELS[dataMode],
     dataModeDescription: DATA_MODE_DESCRIPTIONS[dataMode],
     capabilities,
+    cityName: cityLocation.name,
+    cityLocation,
     zones,
     citizenReports,
     externalSignals,

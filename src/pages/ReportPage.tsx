@@ -45,7 +45,7 @@ const SEVERITY_OPTIONS = [
 ];
 
 export default function ReportPage() {
-  const { zones, getZoneSummary, submitReport } = useAppStore();
+  const { zones, getZoneSummary, submitReport, cityName } = useAppStore();
 
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -166,7 +166,7 @@ export default function ReportPage() {
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-foreground">Submit Incident Report</h1>
         <p className="text-sm text-muted-foreground mt-1 text-pretty">
-          Help Metroville predict failures. Your report feeds directly into the ShadowGrid AI risk engine.
+          Help {cityName} predict failures. Your report feeds directly into the ShadowGrid AI risk engine.
         </p>
       </div>
 

@@ -20,7 +20,6 @@
 
 import type { Zone, ExternalSignal, SignalType, Severity } from '@/types/types';
 import { NEWS_API_KEY, NEWS_API_PROXY_URL, SUPABASE_ANON_KEY, DEMO_CITY } from '@/lib/appConfig';
-import { DEMO_EXTERNAL_SIGNALS } from '@/lib/mockData';
 
 // ─── NewsAPI response shape ───────────────────────────────────────────────────
 
@@ -242,14 +241,13 @@ export async function ingestNewsSignals(
   zones: Zone[],
 ): Promise<NewsIngestionResult> {
   if (!NEWS_AVAILABLE) {
-    // Return seeded news signals as fallback
-    const fallback = DEMO_EXTERNAL_SIGNALS.filter(s => s.source === 'news');
+    // No demo leakage in live mode — just report unavailability with no signals.
     return {
-      signals:  fallback,
+      signals:  [],
       articles: 0,
-      matched:  fallback.length,
+      matched:  0,
       source:   'fallback',
-      error:    'No NewsAPI key or proxy configured — using seeded signals',
+      error:    'No NewsAPI key or proxy configured',
     };
   }
 
@@ -286,22 +284,21 @@ export async function ingestNewsSignals(
 
     const signals = matched.map(articleToSignal);
 
-    // If no live signals matched, supplement with seeded fallback
+    // No matches this cycle — return empty (no demo leakage). The live dataset
+    // simply doesn't grow from news this run.
     if (signals.length === 0) {
-      const fallback = DEMO_EXTERNAL_SIGNALS.filter(s => s.source === 'news');
       return {
-        signals:  fallback,
+        signals:  [],
         articles: unique.length,
         matched:  0,
-        source:   'fallback',
-        error:    'No relevant articles matched — using seeded signals',
+        source:   'live',
+        error:    unique.length > 0 ? 'No relevant articles matched' : 'No articles returned',
       };
     }
 
     return { signals, articles: unique.length, matched: matched.length, source: 'live' };
   } catch (err) {
     const error = err instanceof Error ? err.message : 'News fetch failed';
-    const fallback = DEMO_EXTERNAL_SIGNALS.filter(s => s.source === 'news');
-    return { signals: fallback, articles: 0, matched: 0, source: 'fallback', error };
+    return { signals: [], articles: 0, matched: 0, source: 'fallback', error };
   }
 }

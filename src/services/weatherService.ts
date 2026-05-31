@@ -14,7 +14,6 @@
 
 import type { Zone, ExternalSignal, SignalType, Severity } from '@/types/types';
 import { OPEN_METEO_BASE_URL, DEMO_CITY } from '@/lib/appConfig';
-import { DEMO_EXTERNAL_SIGNALS } from '@/lib/mockData';
 
 // ─── Open-Meteo response shape (subset we care about) ────────────────────────
 
@@ -261,9 +260,9 @@ export async function ingestWeatherSignals(
     return { signals, snapshots, source: 'live' };
   } catch (err) {
     const error = err instanceof Error ? err.message : 'Weather fetch failed';
-    // Return seeded fallback weather signals
-    const fallbackSignals = DEMO_EXTERNAL_SIGNALS.filter(s => s.source === 'weather');
-    return { signals: fallbackSignals, snapshots: [], source: 'fallback', error };
+    // No demo leakage: in live mode a failed fetch yields no signals (the live
+    // dataset simply doesn't grow this cycle). Demo data is never mixed in.
+    return { signals: [], snapshots: [], source: 'fallback', error };
   }
 }
 

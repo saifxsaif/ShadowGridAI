@@ -15,12 +15,17 @@ interface CityRiskMapProps {
   selectedZoneId?: string;
   onZoneClick?: (zoneId: string) => void;
   height?: string;
+  center?: [number, number];
+  zoom?: number;
 }
 
-export function CityRiskMap({ zones, riskSummaries, selectedZoneId, onZoneClick, height = '100%' }: CityRiskMapProps) {
+export function CityRiskMap({ zones, riskSummaries, selectedZoneId, onZoneClick, height = '100%', center, zoom }: CityRiskMapProps) {
   const mapRef = useRef<LeafletMap | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const polygonsRef = useRef<Map<string, Polygon>>(new Map());
+
+  const mapCenter: [number, number] = center ?? [DEMO_CITY_CONFIG.lat, DEMO_CITY_CONFIG.lng];
+  const mapZoom = zoom ?? DEMO_CITY_CONFIG.zoom;
 
   const getRiskForZone = (zoneId: string) =>
     riskSummaries.find(r => r.zone_id === zoneId)?.overall_score ?? 0;
@@ -33,8 +38,8 @@ export function CityRiskMap({ zones, riskSummaries, selectedZoneId, onZoneClick,
       if (!containerRef.current || mapRef.current) return;
 
       const map = L.map(containerRef.current, {
-        center: [DEMO_CITY_CONFIG.lat, DEMO_CITY_CONFIG.lng],
-        zoom: DEMO_CITY_CONFIG.zoom,
+        center: mapCenter,
+        zoom: mapZoom,
         zoomControl: true,
         attributionControl: false,
       });
@@ -122,6 +127,13 @@ export function CityRiskMap({ zones, riskSummaries, selectedZoneId, onZoneClick,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Recenter when the resolved city location changes (e.g. after geocoding)
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setView(mapCenter, mapZoom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapCenter[0], mapCenter[1], mapZoom]);
 
   // Update selected zone highlight
   useEffect(() => {

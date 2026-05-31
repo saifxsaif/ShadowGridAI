@@ -31,7 +31,7 @@ export default function DashboardPage() {
     loading, lastRefresh, refresh,
     zones, citizenReports, externalSignals,
     zoneSummaries, recommendations, failureChains,
-    dashboardSummary, dataModeLabel, dataMode,
+    dashboardSummary, dataModeLabel, dataMode, cityName, cityLocation,
     getExplanationForZone,
   } = useAppStore();
 
@@ -59,7 +59,7 @@ export default function DashboardPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Metroville · Last updated {lastRefresh.toLocaleTimeString()}
+            {cityName} · Last updated {lastRefresh.toLocaleTimeString()}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -179,6 +179,8 @@ export default function DashboardPage() {
                 selectedZoneId={selectedZoneId}
                 onZoneClick={zoneId => setSelectedZoneId(prev => prev === zoneId ? undefined : zoneId)}
                 height="100%"
+                center={[cityLocation.lat, cityLocation.lng]}
+                zoom={cityLocation.zoom}
               />
             )}
           </div>
