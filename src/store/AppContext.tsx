@@ -172,7 +172,7 @@ const DEFAULT_STATE: AppState = {
     signals: [], newSignalCount: 0, persisted: false, errors: [],
     ingestedAt: new Date().toISOString(),
     weather: { signals: [], snapshots: [], source: 'fallback' },
-    news:    { signals: [], articles: 0, matched: 0, source: 'fallback' },
+    news:    { signals: [], articles: 0, matched: 0, source: 'fallback', classifier: 'none' },
   }),
   setAvailableTeams: () => {},
   submitReport: async () => ({ success: false }),
@@ -279,7 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         errors: ['Ingestion is only available in Live mode.'],
         ingestedAt: new Date().toISOString(),
         weather: { signals: [], snapshots: [], source: 'fallback' },
-        news:    { signals: [], articles: 0, matched: 0, source: 'fallback' },
+        news:    { signals: [], articles: 0, matched: 0, source: 'fallback', classifier: 'none' },
       };
       setLastIngestResult(noop);
       return noop;

@@ -100,7 +100,7 @@ export async function ingestExternalSignals(
     ingestNewsSignals(zones).catch(e => {
       const msg = e instanceof Error ? e.message : 'News ingestion failed';
       errors.push(msg);
-      return { signals: [], articles: 0, matched: 0, source: 'fallback' as const, error: msg };
+      return { signals: [], articles: 0, matched: 0, source: 'fallback' as const, classifier: 'none' as const, error: msg };
     }),
   ]);
 

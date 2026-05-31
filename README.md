@@ -248,6 +248,32 @@ If neither a key nor a proxy is configured, the app falls back to seeded news si
 
 ---
 
+## AI Features (Google Gemini)
+
+Two optional AI layers run on **Google Gemini 2.5 Flash-Lite** (cheapest tier, generous free quota), routed through **Supabase Edge Functions** so the Gemini key never reaches the browser.
+
+| Feature | Function | What it does |
+|---|---|---|
+| **LLM Explanation Layer** | `llm-explain` | Turns a zone's structured risk data (scores, signals, reports, propagation) into a concise plain-language explanation + recommended first action. Shown on the Zone Details page via an on-demand **Explain with AI** button. |
+| **NLP News Classifier** | `news-classify` | Classifies ingested news articles into risk categories (flooding, power, road, water, traffic) with confidence — beyond keyword matching. Runs automatically during live news ingestion; the Operations *Last Ingest* panel shows whether the **AI** or **Keyword** classifier was used. |
+
+### Setup
+
+```bash
+# Deploy the functions (already deployed for this project)
+supabase functions deploy llm-explain
+supabase functions deploy news-classify
+
+# Set the Gemini key as a server-side secret (shared by both functions)
+supabase secrets set GEMINI_API_KEY=your-gemini-key
+```
+
+Get a free key at [aistudio.google.com](https://aistudio.google.com/apikey). The client auto-discovers the functions at `<VITE_SUPABASE_URL>/functions/v1`; override with `VITE_SUPABASE_FUNCTIONS_URL` if needed, or disable everything with `VITE_AI_ENABLED=false`.
+
+Both layers **degrade gracefully**: if AI is disabled or a call fails, the app falls back to the deterministic engine explanation and keyword-based news matching.
+
+---
+
 ## Running Locally
 
 ```bash

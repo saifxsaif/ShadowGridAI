@@ -40,6 +40,20 @@ export const NEWS_API_PROXY_URL: string =
 
 export const DEMO_CITY: string = env.VITE_DEMO_CITY ?? 'Metroville';
 
+// ─── AI / Gemini (via Supabase Edge Functions) ───────────────────────────────
+// The Gemini API key lives server-side as an Edge Function secret (GEMINI_API_KEY)
+// and is NEVER exposed to the browser. The client only needs the function base
+// URL, which defaults to this project's Supabase Functions endpoint.
+
+/** Base URL for Supabase Edge Functions, e.g. https://<ref>.supabase.co/functions/v1 */
+export const FUNCTIONS_BASE_URL: string =
+  env.VITE_SUPABASE_FUNCTIONS_URL ??
+  (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1` : '');
+
+// Master switch so AI features can be disabled without code changes.
+export const AI_ENABLED: boolean =
+  (env.VITE_AI_ENABLED ?? 'true') !== 'false' && Boolean(FUNCTIONS_BASE_URL && SUPABASE_ANON_KEY);
+
 // ─── Capability flags ─────────────────────────────────────────────────────────
 // These describe which backends are wired up, used by the service layer to
 // decide whether to hit Supabase / external APIs or fall back to seeded data.

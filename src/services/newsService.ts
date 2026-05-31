@@ -19,7 +19,8 @@
 // TODO: Add sentiment analysis layer for better severity classification.
 
 import type { Zone, ExternalSignal, SignalType, Severity } from '@/types/types';
-import { NEWS_API_KEY, NEWS_API_PROXY_URL, SUPABASE_ANON_KEY, DEMO_CITY } from '@/lib/appConfig';
+import { NEWS_API_KEY, NEWS_API_PROXY_URL, SUPABASE_ANON_KEY, DEMO_CITY, AI_ENABLED } from '@/lib/appConfig';
+import { classifyArticles } from '@/services/aiService';
 
 // ─── NewsAPI response shape ───────────────────────────────────────────────────
 
@@ -169,6 +170,40 @@ function articleToSignal(match: MatchedArticle): ExternalSignal {
   };
 }
 
+// Convert an AI-classified article into an ExternalSignal. Zone is detected via
+// the existing keyword map, falling back to the first zone.
+function classifiedToSignal(
+  article: NewsArticle,
+  cls: { signal_type: SignalType; severity: Severity; confidence: number; keywords: string[] },
+  zoneMap: ZoneKeywordMap[],
+  fallbackZoneId: string,
+): ExternalSignal {
+  const text = `${article.title ?? ''} ${article.description ?? ''}`;
+  const zoneId = detectZone(text, zoneMap) ?? fallbackZoneId;
+  const id = `news-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  return {
+    id,
+    signal_type:       cls.signal_type,
+    zone_id:           zoneId,
+    source:            'news',
+    severity:          cls.severity,
+    confidence:        cls.confidence,
+    detected_keywords: cls.keywords.length > 0 ? cls.keywords : ['ai-classified'],
+    title:             article.title?.slice(0, 120) ?? 'News signal',
+    summary:
+      (article.description?.slice(0, 200) ?? article.title?.slice(0, 200) ?? '') +
+      ` [Source: ${article.source.name} · AI-classified]`,
+    raw_payload: {
+      url:         article.url,
+      publishedAt: article.publishedAt,
+      source:      article.source.name,
+      classifier:  'gemini',
+    },
+    created_at: article.publishedAt ?? new Date().toISOString(),
+  };
+}
+
 // ─── NewsAPI fetch ────────────────────────────────────────────────────────────
 
 const SEARCH_QUERIES = [
@@ -230,6 +265,8 @@ export interface NewsIngestionResult {
   articles: number;
   matched:  number;
   source:   'live' | 'fallback';
+  /** Which path produced the matches: AI classifier, keyword fallback, or none. */
+  classifier: 'ai' | 'keyword' | 'none';
   error?:   string;
 }
 
@@ -247,6 +284,7 @@ export async function ingestNewsSignals(
       articles: 0,
       matched:  0,
       source:   'fallback',
+      classifier: 'none',
       error:    'No NewsAPI key or proxy configured',
     };
   }
@@ -275,14 +313,47 @@ export async function ingestNewsSignals(
       return true;
     });
 
-    // Match articles against keyword rules
-    const matched: MatchedArticle[] = [];
-    for (const article of unique) {
-      const m = matchArticle(article, KEYWORD_RULES, zoneMap, fallbackZone);
-      if (m) matched.push(m);
+    // ── Classification: try the AI/NLP classifier first, fall back to keywords ──
+    let signals: ExternalSignal[] = [];
+    let classifier: 'ai' | 'keyword' | 'none' = 'none';
+
+    if (AI_ENABLED && unique.length > 0) {
+      const classified = await classifyArticles(
+        unique.map(a => ({ title: a.title, description: a.description })),
+        DEMO_CITY,
+      );
+      const aiSignals: ExternalSignal[] = [];
+      for (const c of classified) {
+        if (!c.relevant || !c.signal_type) continue;
+        const article = unique[c.index];
+        if (!article) continue;
+        aiSignals.push(
+          classifiedToSignal(
+            article,
+            { signal_type: c.signal_type, severity: c.severity, confidence: c.confidence, keywords: c.keywords },
+            zoneMap,
+            fallbackZone,
+          ),
+        );
+      }
+      if (aiSignals.length > 0) {
+        signals = aiSignals;
+        classifier = 'ai';
+      }
     }
 
-    const signals = matched.map(articleToSignal);
+    // Keyword fallback when AI is disabled, errored, or matched nothing.
+    if (signals.length === 0) {
+      const matched: MatchedArticle[] = [];
+      for (const article of unique) {
+        const m = matchArticle(article, KEYWORD_RULES, zoneMap, fallbackZone);
+        if (m) matched.push(m);
+      }
+      if (matched.length > 0) {
+        signals = matched.map(articleToSignal);
+        classifier = 'keyword';
+      }
+    }
 
     // No matches this cycle — return empty (no demo leakage). The live dataset
     // simply doesn't grow from news this run.
@@ -292,13 +363,14 @@ export async function ingestNewsSignals(
         articles: unique.length,
         matched:  0,
         source:   'live',
+        classifier: 'none',
         error:    unique.length > 0 ? 'No relevant articles matched' : 'No articles returned',
       };
     }
 
-    return { signals, articles: unique.length, matched: matched.length, source: 'live' };
+    return { signals, articles: unique.length, matched: signals.length, source: 'live', classifier };
   } catch (err) {
     const error = err instanceof Error ? err.message : 'News fetch failed';
-    return { signals: [], articles: 0, matched: 0, source: 'fallback', error };
+    return { signals: [], articles: 0, matched: 0, source: 'fallback', classifier: 'none', error };
   }
 }

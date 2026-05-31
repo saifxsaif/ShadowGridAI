@@ -11,6 +11,7 @@ import { RiskBadge } from '@/components/common/RiskBadge';
 import { CategoryIcon } from '@/components/common/CategoryIcon';
 import { RecommendationsPanel } from '@/components/dashboard/RecommendationsPanel';
 import { RecentSignalsPanel } from '@/components/dashboard/RecentSignalsPanel';
+import { AiZoneInsight } from '@/components/common/AiZoneInsight';
 import { useAppStore } from '@/store/AppContext';
 import { RISK_CATEGORY_LABELS, RISK_WEIGHTS } from '@/lib/constants';
 import { getRiskLevel, RISK_LEVEL_CONFIG } from '@/lib/constants';
@@ -287,6 +288,11 @@ export default function ZoneDetailsPage() {
           </Card>
         </section>
       )}
+
+      {/* AI (Gemini) explanation layer — on-demand LLM insight */}
+      <section>
+        <AiZoneInsight zone={zone} />
+      </section>
 
       {/* Recommendations + Signals */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">

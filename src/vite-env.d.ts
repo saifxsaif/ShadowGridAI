@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_OPEN_METEO_BASE_URL?: string;
   readonly VITE_DEMO_CITY?: string;
   readonly VITE_APP_ID?: string;
+  readonly VITE_SUPABASE_FUNCTIONS_URL?: string;
+  readonly VITE_AI_ENABLED?: string;
 }
 
 interface ImportMeta {

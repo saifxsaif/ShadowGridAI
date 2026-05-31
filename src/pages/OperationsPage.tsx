@@ -243,6 +243,16 @@ export default function OperationsPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
+                    <span>Classifier</span>
+                    <span className={lastIngestResult.news.classifier === 'ai' ? 'text-primary' : 'text-muted-foreground'}>
+                      {lastIngestResult.news.classifier === 'ai'
+                        ? 'AI (Gemini)'
+                        : lastIngestResult.news.classifier === 'keyword'
+                          ? 'Keyword'
+                          : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
                     <span>Total new signals</span>
                     <span className="text-foreground font-mono">{lastIngestResult.newSignalCount}</span>
                   </div>
