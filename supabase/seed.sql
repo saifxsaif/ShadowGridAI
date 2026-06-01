@@ -6,37 +6,37 @@
 -- dataset shown when the app is in Demo mode. The Live dataset (dataset_type='live')
 -- starts empty and is populated at runtime via the Operations → Ingest Signals flow.
 
--- ─── Zones (shared infrastructure — not dataset-scoped) ─────────────────────────
-INSERT INTO zones (id, name, city, lat, lng, polygon, vulnerability_score, flood_sensitivity, historical_failure_rate, elevation_m, population_density, adjacent_zone_ids, infrastructure_notes)
+-- ─── Zones (demo dataset — fixed Metroville infrastructure) ────────────────────
+INSERT INTO zones (id, name, city, lat, lng, polygon, vulnerability_score, flood_sensitivity, historical_failure_rate, elevation_m, population_density, adjacent_zone_ids, infrastructure_notes, dataset_type)
 VALUES
 ('zone-01', 'Riverside District',    'Metroville', 40.730, -74.010,
  '[[40.725,-74.018],[40.725,-74.002],[40.735,-74.002],[40.735,-74.018]]',
  85, 92, 78, 2, 'high', '["zone-02","zone-03"]',
- 'Aging drainage system, low elevation, frequent flooding reports.'),
+ 'Aging drainage system, low elevation, frequent flooding reports.', 'demo'),
 ('zone-02', 'Central Business Hub',  'Metroville', 40.715, -74.005,
  '[[40.710,-74.012],[40.710,-73.998],[40.720,-73.998],[40.720,-74.012]]',
  62, 45, 55, 12, 'high', '["zone-01","zone-04","zone-05"]',
- 'Power grid under stress during peak hours. Road congestion hotspot.'),
+ 'Power grid under stress during peak hours. Road congestion hotspot.', 'demo'),
 ('zone-03', 'Old Harbor Quarter',    'Metroville', 40.700, -74.020,
  '[[40.695,-74.028],[40.695,-74.012],[40.705,-74.012],[40.705,-74.028]]',
  78, 88, 70, 1, 'medium', '["zone-01","zone-06"]',
- 'Historic seawall infrastructure needs urgent inspection.'),
+ 'Historic seawall infrastructure needs urgent inspection.', 'demo'),
 ('zone-04', 'Northern Suburbs',      'Metroville', 40.750, -73.995,
  '[[40.745,-74.002],[40.745,-73.988],[40.755,-73.988],[40.755,-74.002]]',
  40, 30, 28, 32, 'medium', '["zone-02","zone-07"]',
- 'Newer infrastructure; occasional traffic congestion near school zones.'),
+ 'Newer infrastructure; occasional traffic congestion near school zones.', 'demo'),
 ('zone-05', 'Industrial East Zone',  'Metroville', 40.720, -73.985,
  '[[40.715,-73.992],[40.715,-73.978],[40.725,-73.978],[40.725,-73.992]]',
  70, 40, 65, 8, 'low', '["zone-02","zone-04"]',
- 'Heavy machinery causes road wear. Power demand peaks unpredictably.'),
+ 'Heavy machinery causes road wear. Power demand peaks unpredictably.', 'demo'),
 ('zone-06', 'Westbank Residential',  'Metroville', 40.695, -74.030,
  '[[40.690,-74.038],[40.690,-74.022],[40.700,-74.022],[40.700,-74.038]]',
  55, 60, 42, 6, 'high', '["zone-03","zone-07"]',
- 'Dense residential area. Water pressure issues during summer.'),
+ 'Dense residential area. Water pressure issues during summer.', 'demo'),
 ('zone-07', 'University Hill',       'Metroville', 40.760, -74.010,
  '[[40.755,-74.018],[40.755,-74.002],[40.765,-74.002],[40.765,-74.018]]',
  35, 25, 22, 45, 'medium', '["zone-04","zone-06"]',
- 'Elevated terrain provides natural drainage advantage.')
+ 'Elevated terrain provides natural drainage advantage.', 'demo')
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Citizen Reports (demo) ─────────────────────────────────────────────────────

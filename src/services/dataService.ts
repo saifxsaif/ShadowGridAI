@@ -4,7 +4,9 @@
 //   • demo — the stable seeded dataset (dataset_type='demo')
 //   • live — the live, ingested dataset (dataset_type='live')
 //
-// Zones are shared city infrastructure and are NOT dataset-scoped.
+// Zones are now also dataset-scoped:
+//   • demo zones — the 7 seeded Metroville zones
+//   • live zones — procedurally generated for the configured live city
 //
 // Fallback strategy:
 //   • If Supabase is NOT configured, demo reads return seeded mock constants
@@ -40,34 +42,41 @@ function demoFallback<T>(dataset: DatasetType, rows: T[]): T[] {
   return dataset === 'demo' ? rows : [];
 }
 
-// ─── Zones (shared, not dataset-scoped) ─────────────────────────────────────────
+// ─── Zones (dataset-scoped) ──────────────────────────────────────────────────
+// demo → the 7 seeded Metroville zones
+// live → procedurally generated zones for the configured live city
 
-export async function fetchZones(): Promise<Zone[]> {
-  if (!SUPABASE_CONFIGURED) return DEMO_ZONES;
+export async function fetchZones(dataset: DatasetType = 'demo'): Promise<Zone[]> {
+  if (!SUPABASE_CONFIGURED) return dataset === 'demo' ? DEMO_ZONES : [];
   try {
     const { data, error } = await supabase
       .from('zones')
       .select('*')
+      .eq('dataset_type', dataset)
       .order('name');
     if (error) throw error;
-    return Array.isArray(data) && data.length > 0 ? data : DEMO_ZONES;
+    const results = Array.isArray(data) ? data : [];
+    // Demo fallback: if the DB has no demo zones, use the in-memory seed.
+    if (results.length === 0 && dataset === 'demo') return DEMO_ZONES;
+    return results;
   } catch {
-    return DEMO_ZONES;
+    return dataset === 'demo' ? DEMO_ZONES : [];
   }
 }
 
-export async function fetchZoneById(id: string): Promise<Zone | null> {
+export async function fetchZoneById(id: string, dataset: DatasetType = 'demo'): Promise<Zone | null> {
   if (!SUPABASE_CONFIGURED) return DEMO_ZONES.find(z => z.id === id) ?? null;
   try {
     const { data, error } = await supabase
       .from('zones')
       .select('*')
       .eq('id', id)
+      .eq('dataset_type', dataset)
       .maybeSingle();
     if (error) throw error;
-    return data ?? DEMO_ZONES.find(z => z.id === id) ?? null;
+    return data ?? (dataset === 'demo' ? DEMO_ZONES.find(z => z.id === id) ?? null : null);
   } catch {
-    return DEMO_ZONES.find(z => z.id === id) ?? null;
+    return dataset === 'demo' ? DEMO_ZONES.find(z => z.id === id) ?? null : null;
   }
 }
 

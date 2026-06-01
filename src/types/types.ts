@@ -18,8 +18,9 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
 // ─── Dataset separation ───────────────────────────────────────────────────────
 // Every dynamic record belongs to either the stable seeded "demo" dataset or
-// the live, ingested "live" dataset. Zones are shared infrastructure and are
-// NOT scoped by dataset.
+// the live, ingested "live" dataset. Zones are now also dataset-scoped:
+//   demo — the 7 seeded Metroville zones (stable, never overwritten)
+//   live — procedurally generated zones for the configured live city
 export type DatasetType = 'demo' | 'live';
 
 // ─── Zone ─────────────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ export interface Zone {
   adjacent_zone_ids: string[];
   infrastructure_notes?: string;
   created_at: string;
+  dataset_type?: DatasetType;
 }
 
 // ─── Risk Score ───────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import {
   Settings2, Users, ChevronRight, CheckCircle2, Clock, Zap, ArrowUpRight,
   RefreshCw, Radio, Cloud, Newspaper, Database, AlertTriangle, Info,
-  FlaskConical, Trash2,
+  FlaskConical, Trash2, MapPin,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -62,12 +62,14 @@ export default function OperationsPage() {
     refresh,
     ingestAndRefresh,
     resetLiveData,
+    initializeLiveCity,
     loading,
     ingesting,
     lastRefresh,
     lastIngestResult,
     lastLiveIngestAt,
     dataMode,
+    cityName,
   } = useAppStore();
 
   const [signalFilter, setSignalFilter] = useState<string>('all');
@@ -109,6 +111,19 @@ export default function OperationsPage() {
     toast.info('Clearing live dataset…');
     await resetLiveData();
     toast.success('Live dataset cleared.');
+  }
+
+  async function handleInitCity() {
+    toast.info(`Generating zones for ${cityName}…`);
+    const result = await initializeLiveCity();
+    if (result.ok) {
+      toast.success(
+        `${cityName} zones created (${result.namesSource === 'ai' ? 'AI-named' : 'generic names'}). ` +
+        'Run Ingest Signals to populate risk data.',
+      );
+    } else {
+      toast.error(`Zone generation failed: ${result.error ?? 'unknown error'}`);
+    }
   }
 
   const immediateCount = recommendations.filter(r => r.urgency === 'immediate' && r.status === 'pending').length;
@@ -205,16 +220,30 @@ export default function OperationsPage() {
                 )}
               </div>
               {dataMode === 'live' && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="gap-1.5 text-xs text-red-400 border border-red-500/30 hover:bg-red-500/10"
-                  onClick={handleResetLive}
-                  disabled={loading || ingesting}
-                >
-                  <Trash2 size={12} />
-                  Clear Live Dataset
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {zones.length === 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-xs text-primary border border-primary/40 hover:bg-primary/10"
+                      onClick={handleInitCity}
+                      disabled={loading || ingesting}
+                    >
+                      <MapPin size={12} />
+                      Initialize {cityName} Zones
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 text-xs text-red-400 border border-red-500/30 hover:bg-red-500/10"
+                    onClick={handleResetLive}
+                    disabled={loading || ingesting}
+                  >
+                    <Trash2 size={12} />
+                    Clear Live Dataset
+                  </Button>
+                </div>
               )}
             </div>
 

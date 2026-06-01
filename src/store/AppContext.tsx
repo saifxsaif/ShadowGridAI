@@ -43,8 +43,12 @@ import {
   persistLiveEngineOutput,
   resetLiveDataset,
 } from '@/services/livePersistence';
+import {
+  generateCityZones,
+  persistLiveZones,
+} from '@/services/zoneGenerator';
 import { geocodeCity, type CityLocation } from '@/services/geocodeService';
-import { LIVE_CITY } from '@/lib/appConfig';
+import { LIVE_CITY, SUPABASE_CONFIGURED } from '@/lib/appConfig';
 import { DEMO_CITY_CONFIG } from '@/lib/constants';
 import {
   type DataMode,
@@ -105,6 +109,8 @@ export interface AppState {
   resetDataMode: () => Promise<void>;
   /** Wipe all live dataset rows from the DB, then reload. */
   resetLiveData: () => Promise<void>;
+  /** Generate and persist live city zones, then reload. */
+  initializeLiveCity: () => Promise<{ ok: boolean; namesSource?: 'ai' | 'fallback'; error?: string }>;
   /** Fetch live weather + news signals, merge, re-run engine (live mode only). */
   ingestAndRefresh: () => Promise<IngestResult>;
   setAvailableTeams: (n: number) => void;
@@ -181,6 +187,7 @@ const DEFAULT_STATE: AppState = {
   setDataMode: async () => {},
   resetDataMode: async () => {},
   resetLiveData: async () => {},
+  initializeLiveCity: async () => ({ ok: false }),
   ingestAndRefresh: async () => ({
     signals: [], newSignalCount: 0, persisted: false, errors: [],
     ingestedAt: new Date().toISOString(),
@@ -245,7 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const [z, cr, es] = await Promise.all([
-        fetchZones(),
+        fetchZones(mode),
         fetchCitizenReports(mode, 50),
         fetchExternalSignals(mode, 30),
       ]);
@@ -329,6 +336,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLastIngestResult(null);
     await loadDataForMode(dataMode);
   }, [dataMode, loadDataForMode]);
+
+  // Generate and persist live city zones for the geocoded city, then reload.
+  const initializeLiveCity = useCallback(async (): Promise<{ ok: boolean; namesSource?: 'ai' | 'fallback'; error?: string }> => {
+    if (!SUPABASE_CONFIGURED) return { ok: false, error: 'Supabase not configured' };
+    setLoading(true);
+    try {
+      const { zones: generated, namesSource } = await generateCityZones(cityLocation);
+      const persisted = await persistLiveZones(generated);
+      if (!persisted) return { ok: false, error: 'Failed to persist zones to database' };
+      await loadDataForMode('live');
+      return { ok: true, namesSource };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Zone generation failed';
+      return { ok: false, error };
+    } finally {
+      setLoading(false);
+    }
+  }, [cityLocation, loadDataForMode]);
 
   // Initial load
   useEffect(() => { loadDataForMode(INITIAL_MODE); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -449,6 +474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDataMode,
     resetDataMode,
     resetLiveData,
+    initializeLiveCity,
     ingestAndRefresh,
     setAvailableTeams,
     submitReport,

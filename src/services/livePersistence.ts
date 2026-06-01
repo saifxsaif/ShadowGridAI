@@ -105,7 +105,8 @@ export async function persistLiveEngineOutput(params: {
 }
 
 // ─── Reset ──────────────────────────────────────────────────────────────────────
-// Wipes ALL live dataset rows across every table. Demo rows are untouched.
+// Wipes ALL live dataset rows across every table including live zones.
+// Demo rows are untouched.
 
 export async function resetLiveDataset(): Promise<boolean> {
   if (!SUPABASE_CONFIGURED) return false;
@@ -117,6 +118,8 @@ export async function resetLiveDataset(): Promise<boolean> {
       supabase.from('team_allocations').delete().eq('dataset_type', LIVE),
       supabase.from('external_signals').delete().eq('dataset_type', LIVE),
       supabase.from('citizen_reports').delete().eq('dataset_type', LIVE),
+      // Live zones are deleted last (other tables FK-reference them)
+      supabase.from('zones').delete().eq('dataset_type', LIVE),
     ]);
     return true;
   } catch {
