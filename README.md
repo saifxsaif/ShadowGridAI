@@ -49,6 +49,20 @@ All risk scores are fully explainable — no black box.
 
 ---
 
+## Risk Scoring Formula
+
+```
+Risk Score = 0.30 × Citizen Complaint Density
+           + 0.25 × Weather Severity
+           + 0.20 × Public Signal Strength
+           + 0.15 × Historical Failure Rate
+           + 0.10 × Adjacent Zone Propagation
+```
+
+Scores are recomputed on every signal event across 6 categories: `drainage`, `road`, `water`, `power`, `traffic`, `emergency_access`. Each score includes a plain-English explanation with dominant factor and source attribution.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -299,38 +313,6 @@ VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-prox
 
 ---
 
-## Deployment Checklist
-
-### Local run
-- [ ] `pnpm install` succeeds
-- [ ] `cp .env.example .env`
-- [ ] `pnpm dev` — app loads at localhost:5173
-- [ ] Dashboard shows 7 zones in Demo mode
-- [ ] Risk map loads and zones are clickable
-- [ ] Citizen report form submits and map updates
-
-### Supabase setup
-- [ ] Project created at app.supabase.com
-- [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` added to `.env`
-- [ ] Schema migrations applied via SQL editor
-- [ ] Seed SQL applied via SQL editor
-- [ ] App reloads — sidebar shows the Demo / Live switcher
-
-### Vercel deployment
-- [ ] Repo pushed to GitHub
-- [ ] Project imported at vercel.com/new
-- [ ] Env vars added in Vercel dashboard
-- [ ] `VITE_NEWS_API_KEY` is **not** set in production
-- [ ] Live news routed via proxy: `VITE_NEWS_API_PROXY_URL` set + `NEWS_API_KEY` secret configured server-side
-- [ ] Deploy succeeds — app loads in Demo mode by default
-
-### Hackathon submission
-- [ ] Demo URL recorded
-- [ ] README updated with demo URL and screenshots
-- [ ] Judges can navigate dashboard, map, and zone details without setup
-
----
-
 ## Project Structure
 
 ```
@@ -367,20 +349,6 @@ shadowgrid-ai/
 ├── SETUP.md
 └── README.md
 ```
-
----
-
-## Risk Scoring Formula
-
-```
-Risk Score = 0.30 × Citizen Complaint Density
-           + 0.25 × Weather Severity
-           + 0.20 × Public Signal Strength
-           + 0.15 × Historical Failure Rate
-           + 0.10 × Adjacent Zone Propagation
-```
-
-Scores are recomputed on every signal event across 6 categories: `drainage`, `road`, `water`, `power`, `traffic`, `emergency_access`. Each score includes a plain-English explanation with dominant factor and source attribution.
 
 ---
 
