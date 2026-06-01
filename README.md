@@ -161,9 +161,17 @@ Both layers degrade gracefully: if AI is disabled or a call fails, the app falls
 
 ## Screenshots
 
-| Dashboard | Risk Map | Zone Details |
-|---|---|---|
-| _(screenshot)_ | _(screenshot)_ | _(screenshot)_ |
+| Dashboard | Risk Map |
+|---|---|
+| ![Dashboard](public/images/screenshots/dashboard.png) | ![Risk Map](public/images/screenshots/riskmap.png) |
+
+| Analytics | Report Issue |
+|---|---|
+| ![Analytics](public/images/screenshots/analytics.png) | ![Report Issue](public/images/screenshots/report-issue.png) |
+
+| Operations |
+|---|
+| ![Operations](public/images/screenshots/operations.png) |
 
 ---
 
