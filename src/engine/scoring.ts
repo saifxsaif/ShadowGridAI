@@ -147,6 +147,8 @@ export interface ScoringInputs {
   zones: Zone[];
   citizenReports: CitizenReport[];
   externalSignals: ExternalSignal[];
+  /** 'demo' uses full static baseline; 'live' only scores on real activity. */
+  mode?: 'demo' | 'live';
 }
 
 export interface ComputedRiskScore extends Omit<RiskScore, 'id'> {
@@ -158,7 +160,8 @@ export interface ComputedRiskScore extends Omit<RiskScore, 'id'> {
  * Returns a flat array of RiskScore records ready for use in the UI.
  */
 export function computeAllRiskScores(inputs: ScoringInputs): ComputedRiskScore[] {
-  const { zones, citizenReports, externalSignals } = inputs;
+  const { zones, citizenReports, externalSignals, mode = 'demo' } = inputs;
+  const isLive = mode === 'live';
 
   // Step 1 — Build signal clusters
   const clusters = buildSignalClusters(citizenReports, externalSignals);
@@ -177,7 +180,11 @@ export function computeAllRiskScores(inputs: ScoringInputs): ComputedRiskScore[]
       const citizen = computeCitizenComponent(zone.id, category, clusters);
       const weather = computeWeatherComponent(zone.id, category, clusters, externalSignals);
       const signal = computeSignalComponent(zone.id, category, clusters, externalSignals);
-      const historical = computeHistoricalComponent(zone, category);
+      // In live mode the static historical baseline only counts when there is
+      // real live activity for this zone+category — otherwise zones would show
+      // demo-like risk with no actual live data.
+      const hasActivity = citizen > 0 || weather > 0 || signal > 0;
+      const historical = (!isLive || hasActivity) ? computeHistoricalComponent(zone, category) : 0;
 
       // Intermediate score without propagation
       const partial = clamp(
@@ -200,7 +207,8 @@ export function computeAllRiskScores(inputs: ScoringInputs): ComputedRiskScore[]
       const citizen = computeCitizenComponent(zone.id, category, clusters);
       const weather = computeWeatherComponent(zone.id, category, clusters, externalSignals);
       const signal = computeSignalComponent(zone.id, category, clusters, externalSignals);
-      const historical = computeHistoricalComponent(zone, category);
+      const hasActivity = citizen > 0 || weather > 0 || signal > 0;
+      const historical = (!isLive || hasActivity) ? computeHistoricalComponent(zone, category) : 0;
       const propagation = computePropagationComponent(zone.id, category, graph, firstPassScores);
 
       const score = clamp(

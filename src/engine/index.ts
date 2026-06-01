@@ -25,6 +25,7 @@ export interface EngineInputs {
   citizenReports: CitizenReport[];
   externalSignals: ExternalSignal[];
   availableTeams?: number; // default: 8
+  mode?: 'demo' | 'live';  // default: 'demo'
 }
 
 export interface EngineOutput {
@@ -44,11 +45,11 @@ export interface EngineOutput {
  * Main engine entry point. Runs all modules and returns complete computed state.
  */
 export function runEngine(inputs: EngineInputs): EngineOutput {
-  const { zones, citizenReports, externalSignals, availableTeams = 8 } = inputs;
+  const { zones, citizenReports, externalSignals, availableTeams = 8, mode = 'demo' } = inputs;
   const computedAt = new Date().toISOString();
 
   // 1 — Compute risk scores
-  const scoringInputs: ScoringInputs = { zones, citizenReports, externalSignals };
+  const scoringInputs: ScoringInputs = { zones, citizenReports, externalSignals, mode };
   const riskScores: RiskScore[] = computeAllRiskScores(scoringInputs) as RiskScore[];
 
   // 2 — Build zone summaries
@@ -79,9 +80,11 @@ export function runEngine(inputs: EngineInputs): EngineOutput {
     externalSignals,
   );
 
-  // 8 — Generate synthetic trend data based on current score levels
-  const riskTrend = buildRiskTrend(zoneSummaries);
-  const signalTrend = buildSignalTrend(citizenReports, externalSignals);
+  // 8 — Generate trend data.
+  //   demo → synthetic 30-day curve that converges to current scores (polished)
+  //   live → real, data-grounded trend (no fabricated history)
+  const riskTrend = buildRiskTrend(zoneSummaries, mode);
+  const signalTrend = buildSignalTrend(citizenReports, externalSignals, mode);
 
   return {
     riskScores,
@@ -187,7 +190,7 @@ function buildDashboardSummary(
 // These generate plausible 30-day trends that converge to current real scores,
 // making the analytics page show meaningful, data-grounded visualizations.
 
-function buildRiskTrend(summaries: ZoneRiskSummary[]): RiskTrendPoint[] {
+function buildRiskTrend(summaries: ZoneRiskSummary[], mode: 'demo' | 'live' = 'demo'): RiskTrendPoint[] {
   // Current category averages across all zones
   const currentAvg: Record<RiskCategory, number> = {
     drainage: 0, road: 0, water: 0, power: 0, traffic: 0, emergency_access: 0,
@@ -200,6 +203,31 @@ function buildRiskTrend(summaries: ZoneRiskSummary[]): RiskTrendPoint[] {
   const count = summaries.length || 1;
   for (const cat of ALL_CATEGORIES) {
     currentAvg[cat] = Math.round(currentAvg[cat] / count);
+  }
+
+  // Live mode: do NOT fabricate a 30-day history. Show a short, flat, real
+  // window anchored to current scores so the chart reflects only actual data.
+  if (mode === 'live') {
+    const totalCurrent = ALL_CATEGORIES.reduce((s, c) => s + currentAvg[c], 0);
+    // If there's no live activity yet, return an empty series (charts show "no data").
+    if (totalCurrent === 0) return [];
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      const point: RiskTrendPoint = {
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        drainage: 0, road: 0, water: 0, power: 0, traffic: 0,
+        emergency_access: 0, overall: 0,
+      };
+      let overallSum = 0;
+      for (const cat of ALL_CATEGORIES) {
+        // Flat line at the real current value (we only know "now" in live mode).
+        (point as unknown as Record<string, number>)[cat] = currentAvg[cat];
+        overallSum += currentAvg[cat];
+      }
+      point.overall = Math.round(overallSum / ALL_CATEGORIES.length);
+      return point;
+    });
   }
 
   return Array.from({ length: 30 }, (_, i) => {
@@ -238,6 +266,7 @@ function buildRiskTrend(summaries: ZoneRiskSummary[]): RiskTrendPoint[] {
 function buildSignalTrend(
   citizenReports: CitizenReport[],
   externalSignals: ExternalSignal[],
+  mode: 'demo' | 'live' = 'demo',
 ): SignalCountPoint[] {
   // Count real signals per day for last 14 days
   return Array.from({ length: 14 }, (_, i) => {
@@ -263,7 +292,17 @@ function buildSignalTrend(
       return s.source === 'news' && t >= dayStart.getTime() && t <= dayEnd.getTime();
     }).length;
 
-    // Add synthetic baseline so the chart has visible data even on quiet days
+    // Demo mode adds a synthetic baseline so the chart looks populated for the
+    // presentation. Live mode reports ONLY real counts — no fabrication.
+    if (mode === 'live') {
+      return {
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        citizen,
+        weather,
+        news,
+      };
+    }
+
     const syntheticBase = Math.floor(2 + Math.sin(i * 0.7) * 1.5 + 1);
     return {
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

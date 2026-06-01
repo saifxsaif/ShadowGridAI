@@ -88,6 +88,15 @@ export default function AnalyticsPage() {
         </CardHeader>
         <CardContent>
           <div className="w-full min-w-0 overflow-hidden h-[280px]">
+            {riskTrend.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center gap-1">
+                <Activity size={22} className="text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">No trend data yet</p>
+                <p className="text-xs text-muted-foreground/70 max-w-xs text-pretty">
+                  Live mode builds trends from real ingested data. Run an ingest from the Operations page to populate this chart.
+                </p>
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={riskTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <defs>
@@ -117,6 +126,7 @@ export default function AnalyticsPage() {
                 ))}
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </CardContent>
       </Card>

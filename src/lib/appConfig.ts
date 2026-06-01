@@ -38,7 +38,15 @@ export const NEWS_API_PROXY_URL: string =
 
 // ─── App identity ─────────────────────────────────────────────────────────────
 
-export const DEMO_CITY: string = env.VITE_DEMO_CITY ?? 'Metroville';
+// The seeded DEMO dataset is fixed to Metroville (see DEMO_CITY_CONFIG in
+// constants.ts) so it always matches the seed data and renders deterministically.
+// The LIVE dataset uses a real, configurable city for external queries + map.
+//   VITE_LIVE_CITY takes precedence; VITE_DEMO_CITY is kept for backwards compat.
+export const LIVE_CITY: string =
+  env.VITE_LIVE_CITY ?? env.VITE_DEMO_CITY ?? 'Metroville';
+
+// Deprecated alias — retained so older imports keep working. Prefer LIVE_CITY.
+export const DEMO_CITY: string = LIVE_CITY;
 
 // ─── AI / Gemini (via Supabase Edge Functions) ───────────────────────────────
 // The Gemini API key lives server-side as an Edge Function secret (GEMINI_API_KEY)

@@ -22,7 +22,12 @@ const TREND_ICON = {
 };
 
 export function HighRiskZonesPanel({ summaries, onZoneClick, selectedZoneId }: HighRiskZonesPanelProps) {
-  const sorted = [...summaries].sort((a, b) => b.overall_score - a.overall_score).slice(0, 6);
+  // Only surface zones that actually carry risk, so an empty live dataset
+  // doesn't show a list of zero-score zones.
+  const sorted = [...summaries]
+    .filter(z => z.overall_score > 0)
+    .sort((a, b) => b.overall_score - a.overall_score)
+    .slice(0, 6);
 
   return (
     <Card className="h-full flex flex-col">
@@ -33,6 +38,14 @@ export function HighRiskZonesPanel({ summaries, onZoneClick, selectedZoneId }: H
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto p-0">
+        {sorted.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm text-muted-foreground">No active risk zones</p>
+            <p className="text-xs text-muted-foreground/70 mt-1 text-pretty">
+              Ingest live signals or submit a report to populate zone risk.
+            </p>
+          </div>
+        ) : (
         <div className="divide-y divide-border">
           {sorted.map((zone, idx) => (
             <button
@@ -68,6 +81,7 @@ export function HighRiskZonesPanel({ summaries, onZoneClick, selectedZoneId }: H
             </button>
           ))}
         </div>
+        )}
 
         {/* View all link */}
         <div className="px-4 py-3 border-t border-border">

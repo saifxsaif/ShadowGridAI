@@ -44,7 +44,7 @@ import {
   resetLiveDataset,
 } from '@/services/livePersistence';
 import { geocodeCity, type CityLocation } from '@/services/geocodeService';
-import { DEMO_CITY } from '@/lib/appConfig';
+import { LIVE_CITY } from '@/lib/appConfig';
 import { DEMO_CITY_CONFIG } from '@/lib/constants';
 import {
   type DataMode,
@@ -119,14 +119,27 @@ export interface AppState {
 const EMPTY_MAP = new Map<string, ZoneExplanation>();
 const INITIAL_MODE = getStoredDataMode();
 
-// Default city location — the configured name with the seed coordinates as a
-// safe starting point until geocoding resolves the real lat/lng.
-const DEFAULT_CITY_LOCATION: CityLocation = {
-  name: DEMO_CITY,
+// Demo city is FIXED to the seeded dataset's city (Metroville) so demo always
+// matches its seed data and renders deterministically. Live uses the real,
+// configurable city (VITE_LIVE_CITY) for external queries + map.
+const DEMO_CITY_LOCATION: CityLocation = {
+  name: DEMO_CITY_CONFIG.name,
   lat:  DEMO_CITY_CONFIG.lat,
   lng:  DEMO_CITY_CONFIG.lng,
   zoom: DEMO_CITY_CONFIG.zoom,
 };
+
+// Starting point for the live city until geocoding resolves the real lat/lng.
+const LIVE_CITY_FALLBACK: CityLocation = {
+  name: LIVE_CITY,
+  lat:  DEMO_CITY_CONFIG.lat,
+  lng:  DEMO_CITY_CONFIG.lng,
+  zoom: DEMO_CITY_CONFIG.zoom,
+};
+
+function initialCityLocation(mode: DataMode): CityLocation {
+  return mode === 'live' ? LIVE_CITY_FALLBACK : DEMO_CITY_LOCATION;
+}
 
 const DEFAULT_SUMMARY: DashboardSummary = {
   total_active_signals: 0,
@@ -149,8 +162,8 @@ const DEFAULT_STATE: AppState = {
   dataModeLabel: DATA_MODE_LABELS[INITIAL_MODE],
   dataModeDescription: DATA_MODE_DESCRIPTIONS[INITIAL_MODE],
   capabilities: getCapabilities(),
-  cityName: DEMO_CITY,
-  cityLocation: DEFAULT_CITY_LOCATION,
+  cityName: initialCityLocation(INITIAL_MODE).name,
+  cityLocation: initialCityLocation(INITIAL_MODE),
   zones: [],
   citizenReports: [],
   externalSignals: [],
@@ -201,7 +214,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [externalSignals, setExternalSignals] = useState<ExternalSignal[]>([]);
   const [availableTeams, setAvailableTeams] = useState(8);
   const [engineOutput, setEngineOutput] = useState<EngineOutput | null>(null);
-  const [cityLocation, setCityLocation] = useState<CityLocation>(DEFAULT_CITY_LOCATION);
+  const [cityLocation, setCityLocation] = useState<CityLocation>(initialCityLocation(INITIAL_MODE));
 
   const capabilities = getCapabilities();
 
@@ -217,6 +230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         citizenReports: cr,
         externalSignals: es,
         availableTeams: teams,
+        mode: activeModeRef.current,
       };
       const output = runEngine(inputs);
       setEngineOutput(output);
@@ -319,14 +333,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Initial load
   useEffect(() => { loadDataForMode(INITIAL_MODE); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resolve the configured city name → map coordinates (once on mount).
+  // Resolve the city for the active mode:
+  //   demo → fixed seeded city (no geocoding, always deterministic)
+  //   live → geocode the configured VITE_LIVE_CITY for the map + labels
   useEffect(() => {
     let cancelled = false;
-    geocodeCity(DEMO_CITY, DEFAULT_CITY_LOCATION).then(loc => {
+    if (dataMode === 'demo') {
+      setCityLocation(DEMO_CITY_LOCATION);
+      return;
+    }
+    // live
+    setCityLocation(LIVE_CITY_FALLBACK);
+    geocodeCity(LIVE_CITY, LIVE_CITY_FALLBACK).then(loc => {
       if (!cancelled) setCityLocation(loc);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [dataMode]);
 
   // Re-run engine when availableTeams changes (without re-fetching)
   useEffect(() => {
