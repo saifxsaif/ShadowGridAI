@@ -1,7 +1,3 @@
-# Welcome to Your Miaoda Project
-Miaoda Application Link URL
-    URL:https://medo.dev/projects/app-bso1tpqvnksh
-
 # ShadowGrid AI 🛡️
 ### Predictive Smart City Failure Intelligence Platform
 
@@ -62,10 +58,12 @@ All risk scores are fully explainable — no black box.
 | Map | Leaflet |
 | State | React Context + custom hooks |
 | Charts | Recharts |
-| Database | Supabase (Postgres) |
+| Database | Supabase (Postgres + Edge Functions) |
 | Weather API | Open-Meteo (free, no key required) |
 | News API | NewsAPI (free tier, optional) |
+| AI Layer | Google Gemini 2.5 Flash-Lite via Supabase Edge Functions |
 | Hosting | Vercel (recommended) |
+| UI prototyping / design support | MeDo AI |
 
 ---
 
@@ -95,7 +93,7 @@ All risk scores are fully explainable — no black box.
 │                                       │                  │
 │  ┌────────────────────────────────────▼───────────────┐  │
 │  │  UI Pages                                          │  │
-│  │  Overview · Dashboard · Risk Map · Analytics       │  │
+│  │  Landing · Dashboard · Risk Map · Analytics        │  │
 │  │  Zone Details · Report · Operations                │  │
 │  └────────────────────────────────────────────────────┘  │
 │                                                          │
@@ -104,9 +102,11 @@ All risk scores are fully explainable — no black box.
 └──────────────────────────────────────────────────────────┘
 ```
 
-### Data Modes
+---
 
-ShadowGrid has **two runtime data modes**, both backed by the database and switchable from the UI (sidebar or Operations Center) without restarting or changing env vars. The choice is saved in `localStorage`, and the app always **starts in Demo mode**.
+## Data Modes
+
+ShadowGrid has two runtime data modes, both backed by the database and switchable from the UI (sidebar or Operations Center) without restarting or changing env vars. The choice is saved in `localStorage`, and the app always starts in Demo mode.
 
 | Mode | Source | Behaviour |
 |---|---|---|
@@ -119,9 +119,33 @@ When Supabase is not configured, Demo mode falls back to in-memory seeded consta
 
 ---
 
-## Screenshots
+## AI Features (Google Gemini)
 
-> _Add screenshots after first deployment_
+Two optional AI layers run on **Google Gemini 2.5 Flash-Lite**, routed through **Supabase Edge Functions** so the Gemini key never reaches the browser.
+
+| Feature | Function | What it does |
+|---|---|---|
+| **LLM Explanation Layer** | `llm-explain` | Turns a zone's structured risk data (scores, signals, reports, propagation) into a concise plain-language explanation + recommended first action. Shown on the Zone Details page via an on-demand **Explain with AI** button. |
+| **NLP News Classifier** | `news-classify` | Classifies ingested news articles into risk categories (flooding, power, road, water, traffic) with confidence — beyond keyword matching. Runs automatically during live news ingestion. |
+
+### Setup
+
+```bash
+# Deploy the Edge Functions
+supabase functions deploy llm-explain
+supabase functions deploy news-classify
+
+# Set the Gemini key as a server-side secret (shared by both functions)
+supabase secrets set GEMINI_API_KEY=your-gemini-key
+```
+
+Get a free key at [aistudio.google.com](https://aistudio.google.com/apikey). The client auto-discovers the functions at `<VITE_SUPABASE_URL>/functions/v1`; override with `VITE_SUPABASE_FUNCTIONS_URL` if needed, or disable everything with `VITE_AI_ENABLED=false`.
+
+Both layers degrade gracefully: if AI is disabled or a call fails, the app falls back to the deterministic engine explanation and keyword-based news matching.
+
+---
+
+## Screenshots
 
 | Dashboard | Risk Map | Zone Details |
 |---|---|---|
@@ -161,29 +185,20 @@ The app runs in **Demo mode** with no `.env` changes needed.
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values you want. **Env vars do not select the data mode** — they only describe which backends are available. The Demo/Live mode is chosen at runtime in the UI (see below).
+Copy `.env.example` to `.env` and fill in the values you want. Env vars do not select the data mode — they only describe which backends are available. The Demo/Live mode is chosen at runtime in the UI.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `VITE_SUPABASE_URL` | Optional | — | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Optional | — | Supabase anon/public key |
-| `VITE_NEWS_API_KEY` | Optional | — | [newsapi.org](https://newsapi.org) free key (enables live news ingestion) |
-| `VITE_NEWS_API_PROXY_URL` | Optional | — | Proxy URL for NewsAPI (avoids browser CORS) |
+| `VITE_NEWS_API_KEY` | Optional | — | [newsapi.org](https://newsapi.org) free key — local dev only, do not set in production |
+| `VITE_NEWS_API_PROXY_URL` | Optional | — | Proxy URL for NewsAPI (avoids browser CORS on public domains) |
 | `VITE_OPEN_METEO_BASE_URL` | Optional | `https://api.open-meteo.com/v1` | Override for tests/CI |
-| `VITE_LIVE_CITY` | Optional | `Mumbai` | City for Live mode (external queries + map). Demo is always Metroville. |
+| `VITE_SUPABASE_FUNCTIONS_URL` | Optional | `<VITE_SUPABASE_URL>/functions/v1` | Override Edge Functions base URL |
+| `VITE_AI_ENABLED` | Optional | `true` | Set to `false` to disable all AI features |
+| `VITE_LIVE_CITY` | Optional | `London` | City for Live mode (external queries + map center) |
 
-> ⚠️ **Never commit `.env`** — it is in `.gitignore` by default.
-
----
-
-## Runtime Data Mode Switcher
-
-The active dataset is chosen **in the app**, not via env vars:
-
-- A **Demo / Live** toggle lives in the sidebar (compact) and in the **Operations Center** (full control with description, last-ingest time, and a *Clear Live Dataset* action).
-- The selection is persisted in `localStorage` (`shadowgrid.dataMode`), so a refresh keeps your choice. The app **defaults to Demo** and a *Reset to Demo* action clears the preference.
-- Switching modes clears in-memory state and reloads the matching dataset from the DB, then re-runs the scoring engine — no stale cross-mode data.
-- **Ingestion (weather + news) only runs in Live mode.** It writes `dataset_type='live'` rows; the Demo dataset is never touched.
+> ⚠️ **Never commit `.env`** — it is in `.gitignore`.
 
 ---
 
@@ -191,12 +206,11 @@ The active dataset is chosen **in the app**, not via env vars:
 
 ### 1. Create a project
 
-- Go to [app.supabase.com](https://app.supabase.com) → **New Project**
-- Copy **Project URL** and **anon public key** into `.env`
+Go to [app.supabase.com](https://app.supabase.com) → **New Project**. Copy the **Project URL** and **anon public key** into `.env`.
 
-### 2. Apply the schema migrations
+### 2. Apply schema migrations
 
-Open the **SQL Editor** in your Supabase project and run, in order, the full contents of:
+Open the **SQL Editor** in your Supabase project and run, in order:
 
 ```
 supabase/migrations/00001_create_shadowgrid_schema.sql   -- tables + dataset_type + read/insert policies
@@ -205,15 +219,9 @@ supabase/migrations/00003_live_delete_policies.sql       -- live-only insert/upd
 supabase/migrations/00004_zones_dataset_type.sql         -- dataset_type on zones table + live zone RLS
 ```
 
-> `00001` already includes the `dataset_type` columns, so `00002` is a safe no-op when starting fresh. It exists for databases created before dataset separation was added.
-
 ### 3. Seed the database
 
-Run the full contents of:
-
-```
-supabase/seed.sql
-```
+Run the full contents of `supabase/seed.sql`.
 
 ### 4. Verify
 
@@ -229,53 +237,20 @@ ORDER BY table_name;
 
 ## NewsAPI Setup (Optional)
 
-Register for a free key at [newsapi.org](https://newsapi.org). How you wire it depends on the environment:
+Register for a free key at [newsapi.org](https://newsapi.org).
 
-**Local development (localhost)**
-- Add to `.env`: `VITE_NEWS_API_KEY=your_key`
-- NewsAPI allows direct browser requests from `localhost`, so no proxy is needed.
+**Local development** — add `VITE_NEWS_API_KEY=your_key` to `.env`. NewsAPI allows direct browser requests from `localhost`.
 
-**Production (public domain)**
-- NewsAPI's free tier **blocks direct browser requests** on public domains (CORS), and a `VITE_`-prefixed key is bundled into the client where anyone can read it.
-- So in production: **do not set `VITE_NEWS_API_KEY`**. Instead route through a server-side proxy that holds the key:
-  - **Supabase Edge Function** (recommended): deploy `supabase/functions/news-proxy`, set the `NEWS_API_KEY` secret, and set
-    `VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-proxy`
-  - **Vercel API route**: set `NEWS_API_KEY` (server-side, no `VITE_`) and `VITE_NEWS_API_PROXY_URL=/api/news-proxy`
-- See `SETUP.md` → *NewsAPI Browser CORS Issue* for full deploy steps.
+**Production** — NewsAPI's free tier blocks direct browser requests on public domains, and a `VITE_`-prefixed key is bundled into the client. Do not set `VITE_NEWS_API_KEY` in production. Route through a server-side proxy instead:
 
-> 🔐 **Security**: any `VITE_`-prefixed variable is embedded in the client bundle and publicly visible. Keep the raw NewsAPI key server-side (proxy secret) for any public deploy. `newsService.ts` automatically omits the client key when a proxy URL is set and sends the Supabase anon key instead.
+- **Supabase Edge Function** (recommended): deploy `supabase/functions/news-proxy`, set the `NEWS_API_KEY` secret, then set `VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-proxy`
+- **Vercel API route**: set `NEWS_API_KEY` (server-side, no `VITE_` prefix) and `VITE_NEWS_API_PROXY_URL=/api/news-proxy`
 
 If neither a key nor a proxy is configured, the app falls back to seeded news signals — Demo mode still works.
 
 ---
 
-## AI Features (Google Gemini)
-
-Two optional AI layers run on **Google Gemini 2.5 Flash-Lite** (cheapest tier, generous free quota), routed through **Supabase Edge Functions** so the Gemini key never reaches the browser.
-
-| Feature | Function | What it does |
-|---|---|---|
-| **LLM Explanation Layer** | `llm-explain` | Turns a zone's structured risk data (scores, signals, reports, propagation) into a concise plain-language explanation + recommended first action. Shown on the Zone Details page via an on-demand **Explain with AI** button. |
-| **NLP News Classifier** | `news-classify` | Classifies ingested news articles into risk categories (flooding, power, road, water, traffic) with confidence — beyond keyword matching. Runs automatically during live news ingestion; the Operations *Last Ingest* panel shows whether the **AI** or **Keyword** classifier was used. |
-
-### Setup
-
-```bash
-# Deploy the functions (already deployed for this project)
-supabase functions deploy llm-explain
-supabase functions deploy news-classify
-
-# Set the Gemini key as a server-side secret (shared by both functions)
-supabase secrets set GEMINI_API_KEY=your-gemini-key
-```
-
-Get a free key at [aistudio.google.com](https://aistudio.google.com/apikey). The client auto-discovers the functions at `<VITE_SUPABASE_URL>/functions/v1`; override with `VITE_SUPABASE_FUNCTIONS_URL` if needed, or disable everything with `VITE_AI_ENABLED=false`.
-
-Both layers **degrade gracefully**: if AI is disabled or a call fails, the app falls back to the deterministic engine explanation and keyword-based news matching.
-
----
-
-## Running Locally
+## Local Development
 
 ```bash
 pnpm dev          # Start dev server → http://localhost:5173
@@ -295,13 +270,10 @@ No internet connection required in Demo mode.
 ```bash
 pnpm add -g vercel
 vercel
-# Then add env vars (client-safe, VITE_-prefixed):
 vercel env add VITE_SUPABASE_URL
 vercel env add VITE_SUPABASE_ANON_KEY
 vercel env add VITE_NEWS_API_PROXY_URL   # → your Supabase Edge Function URL
 ```
-
-> Do **not** add `VITE_NEWS_API_KEY` to a public deploy — it would be exposed in the client bundle. Use the proxy instead (below).
 
 ### Option B — Vercel Dashboard
 
@@ -311,85 +283,46 @@ vercel env add VITE_NEWS_API_PROXY_URL   # → your Supabase Edge Function URL
 4. Output directory: `dist`
 5. Add env vars under **Settings → Environment Variables**
 
-### Live News in Production (CORS-safe)
+> Do **not** add `VITE_NEWS_API_KEY` to a public deploy — it would be exposed in the client bundle.
 
-The recommended path is the **Supabase Edge Function** in this repo (`supabase/functions/news-proxy`), since it works no matter where the frontend is hosted and keeps the NewsAPI key server-side:
+### Live News in Production (CORS-safe)
 
 ```bash
 supabase functions deploy news-proxy
-supabase secrets set NEWS_API_KEY=your-newsapi-key   # server-side only
+supabase secrets set NEWS_API_KEY=your-newsapi-key
 ```
 
 Then set on the frontend host:
 ```
 VITE_NEWS_API_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/news-proxy
-# (leave VITE_NEWS_API_KEY unset in production)
-```
-
-If you'd rather keep everything on Vercel, create `api/news-proxy.ts`:
-
-```typescript
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { q = 'infrastructure', pageSize = '10' } = req.query;
-  const url = `https://newsapi.org/v2/everything?q=${q}&pageSize=${pageSize}&sortBy=publishedAt&apiKey=${process.env.NEWS_API_KEY}`;
-  const data = await fetch(url).then(r => r.json());
-  res.setHeader('Cache-Control', 's-maxage=300');
-  res.json(data);
-}
-```
-
-Set `NEWS_API_KEY` (server-side, no `VITE_` prefix) and `VITE_NEWS_API_PROXY_URL=/api/news-proxy` in Vercel env vars.
-
----
-
-## GitHub Publishing Checklist
-
-```
-✅ .gitignore includes: .env, node_modules/, dist/
-✅ No hardcoded secrets in source code
-✅ .env.example committed with all vars documented
-✅ README.md present and complete
-✅ supabase/migrations/ committed
-✅ supabase/seed.sql committed
-✅ SETUP.md committed
-
-Steps:
-1. Create a new repo on GitHub/GitLab
-2. git remote add origin https://github.com/your-username/shadowgrid-ai.git
-3. git add .
-4. git commit -m "Initial ShadowGrid AI MVP"
-5. git push -u origin main
 ```
 
 ---
 
-## Final Deployment Checklist
+## Deployment Checklist
 
 ### Local run
 - [ ] `pnpm install` succeeds
 - [ ] `cp .env.example .env`
 - [ ] `pnpm dev` — app loads at localhost:5173
-- [ ] Dashboard shows 7 zones in seeded mode
+- [ ] Dashboard shows 7 zones in Demo mode
 - [ ] Risk map loads and zones are clickable
 - [ ] Citizen report form submits and map updates
 
 ### Supabase setup
 - [ ] Project created at app.supabase.com
 - [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` added to `.env`
-- [ ] Schema migration applied via SQL editor
+- [ ] Schema migrations applied via SQL editor
 - [ ] Seed SQL applied via SQL editor
-- [ ] App reloads — sidebar shows the **Demo / Live** switcher and mode badge
+- [ ] App reloads — sidebar shows the Demo / Live switcher
 
 ### Vercel deployment
-- [ ] Repo pushed to GitHub/GitLab
+- [ ] Repo pushed to GitHub
 - [ ] Project imported at vercel.com/new
 - [ ] Env vars added in Vercel dashboard
-- [ ] **`VITE_NEWS_API_KEY` is NOT set in production** (key would leak in the client bundle)
+- [ ] `VITE_NEWS_API_KEY` is **not** set in production
 - [ ] Live news routed via proxy: `VITE_NEWS_API_PROXY_URL` set + `NEWS_API_KEY` secret configured server-side
-- [ ] Deploy succeeds — check build logs
-- [ ] App loads at Vercel URL in Demo mode by default; switch to Live mode in-app
+- [ ] Deploy succeeds — app loads in Demo mode by default
 
 ### Hackathon submission
 - [ ] Demo URL recorded
@@ -405,20 +338,31 @@ shadowgrid-ai/
 ├── public/
 ├── src/
 │   ├── components/
-│   │   ├── common/            # RiskBadge, CategoryIcon, RiskScoreRing
-│   │   ├── dashboard/         # CityRiskMap, StatCard, FailureChainPanel …
+│   │   ├── common/            # RiskBadge, CategoryIcon, RiskScoreRing, AiZoneInsight
+│   │   ├── dashboard/         # CityRiskMap, StatCard, FailureChainPanel, RecentSignalsPanel …
 │   │   ├── layouts/           # AppLayout (sidebar + topbar)
 │   │   └── map/               # ZoneSidePanel (map drill-down)
 │   ├── engine/                # 8 scoring/analysis modules (pure functions)
-│   ├── pages/                 # 7 route pages
-│   ├── services/              # dataService, weatherService, newsService, ingestionService
+│   │   │                      # scoring, signalCluster, zoneGraph, timeDecay,
+│   │   │                      # failureChain, recommendations, teamAllocation, explainer
+│   ├── pages/                 # LandingPage, DashboardPage, MapPage, AnalyticsPage,
+│   │                          # ZoneDetailsPage, ReportPage, OperationsPage, NotFound
+│   ├── services/              # dataService, weatherService, newsService,
+│   │                          # ingestionService, aiService, geocodeService,
+│   │                          # livePersistence, zoneGenerator
 │   ├── store/                 # AppContext (reactive store)
-│   ├── lib/                   # appConfig, constants, mockData, uiHelpers
+│   ├── lib/                   # appConfig, constants, mockData, dataMode, uiHelpers
 │   ├── types/                 # types.ts (all domain types)
 │   └── db/                    # supabase.ts (client)
 ├── supabase/
-│   ├── migrations/            # 00001_create_shadowgrid_schema.sql
-│   └── seed.sql               # 7 zones + demo data (Metroville)
+│   ├── functions/
+│   │   ├── llm-explain/       # LLM zone explanation (Gemini)
+│   │   ├── news-classify/     # NLP news classifier (Gemini)
+│   │   ├── news-proxy/        # NewsAPI CORS proxy
+│   │   └── zone-names/        # Zone name resolver
+│   ├── migrations/            # 00001–00004 schema migrations
+│   ├── seed.sql               # 7 zones + demo data (Metroville)
+│   └── live_seed_mumbai.sql   # Optional live seed for Mumbai
 ├── .env.example
 ├── SETUP.md
 └── README.md
@@ -436,7 +380,7 @@ Risk Score = 0.30 × Citizen Complaint Density
            + 0.10 × Adjacent Zone Propagation
 ```
 
-Scores are recomputed on every signal event. Each score includes a plain-English explanation with dominant factor and source attribution.
+Scores are recomputed on every signal event across 6 categories: `drainage`, `road`, `water`, `power`, `traffic`, `emergency_access`. Each score includes a plain-English explanation with dominant factor and source attribution.
 
 ---
 
