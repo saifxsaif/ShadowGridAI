@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Dark background circle -->
+  <circle cx="16" cy="16" r="16" fill="#0f172a"/>
+  <!-- Shield shape in cyan/primary -->
+  <path d="M16 4 L26 8 L26 17 C26 22.5 21.5 27 16 28 C10.5 27 6 22.5 6 17 L6 8 Z"
+        fill="#00d9ff" fill-opacity="0.15" stroke="#00d9ff" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Grid lines inside shield (the "Grid" in ShadowGrid) -->
+  <line x1="11" y1="13" x2="21" y2="13" stroke="#00d9ff" stroke-width="1" stroke-opacity="0.7"/>
+  <line x1="11" y1="17" x2="21" y2="17" stroke="#00d9ff" stroke-width="1" stroke-opacity="0.7"/>
+  <line x1="14" y1="10" x2="14" y2="22" stroke="#00d9ff" stroke-width="1" stroke-opacity="0.7"/>
+  <line x1="18" y1="10" x2="18" y2="22" stroke="#00d9ff" stroke-width="1" stroke-opacity="0.7"/>
+  <!-- Pulse dot — critical alert indicator -->
+  <circle cx="16" cy="15" r="2.5" fill="#00d9ff"/>
+</svg>
