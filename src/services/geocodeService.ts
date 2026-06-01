@@ -1,7 +1,7 @@
 // ShadowGrid AI — City geocoding (Open-Meteo Geocoding API, free, no key)
 //
-// Resolves the configured city name (VITE_DEMO_CITY) into map coordinates so
-// the UI and map always reflect whatever city is set in the environment.
+// Resolves a city name (VITE_LIVE_CITY for live mode) into map coordinates so
+// the UI and map always reflect the configured city.
 // Results are cached in localStorage so we only hit the network once per city.
 //
 // Docs: https://open-meteo.com/en/docs/geocoding-api

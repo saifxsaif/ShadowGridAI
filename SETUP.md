@@ -61,6 +61,7 @@ The app starts in **Demo** mode and exposes a Demo/Live switcher in the sidebar 
 -- 1. supabase/migrations/00001_create_shadowgrid_schema.sql  (tables + dataset_type + read/insert policies)
 -- 2. supabase/migrations/00002_add_dataset_type.sql          (idempotent; no-op on a fresh 00001)
 -- 3. supabase/migrations/00003_live_delete_policies.sql      (live-only insert/update/delete RLS)
+-- 4. supabase/migrations/00004_zones_dataset_type.sql        (dataset_type on zones + live zone RLS)
 ```
 
 ### 3. Seed the database

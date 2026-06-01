@@ -263,7 +263,7 @@ export default function DashboardPage() {
       {/* 6 & 7 — Failure Chain + Analytics Preview */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <FailureChainPanel chains={failureChains} />
-        <RiskAnalyticsPreview riskSummaries={zoneSummaries} />
+        <RiskAnalyticsPreview />
       </section>
     </div>
   );

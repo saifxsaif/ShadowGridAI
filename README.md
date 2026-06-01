@@ -170,7 +170,7 @@ Copy `.env.example` to `.env` and fill in the values you want. **Env vars do not
 | `VITE_NEWS_API_KEY` | Optional | — | [newsapi.org](https://newsapi.org) free key (enables live news ingestion) |
 | `VITE_NEWS_API_PROXY_URL` | Optional | — | Proxy URL for NewsAPI (avoids browser CORS) |
 | `VITE_OPEN_METEO_BASE_URL` | Optional | `https://api.open-meteo.com/v1` | Override for tests/CI |
-| `VITE_DEMO_CITY` | Optional | `Metroville` | City name for live weather/news queries |
+| `VITE_LIVE_CITY` | Optional | `Mumbai` | City for Live mode (external queries + map). Demo is always Metroville. |
 
 > ⚠️ **Never commit `.env`** — it is in `.gitignore` by default.
 
@@ -202,6 +202,7 @@ Open the **SQL Editor** in your Supabase project and run, in order, the full con
 supabase/migrations/00001_create_shadowgrid_schema.sql   -- tables + dataset_type + read/insert policies
 supabase/migrations/00002_add_dataset_type.sql           -- idempotent guard (no-op on a fresh 00001)
 supabase/migrations/00003_live_delete_policies.sql       -- live-only insert/update/delete RLS
+supabase/migrations/00004_zones_dataset_type.sql         -- dataset_type on zones table + live zone RLS
 ```
 
 > `00001` already includes the `dataset_type` columns, so `00002` is a safe no-op when starting fresh. It exists for databases created before dataset separation was added.

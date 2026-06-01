@@ -318,12 +318,10 @@ export async function ingestNewsSignals(
     let classifier: 'ai' | 'keyword' | 'none' = 'none';
 
     if (AI_ENABLED && unique.length > 0) {
-      console.log(`[newsService] Sending ${unique.length} articles to AI classifier…`);
       const classified = await classifyArticles(
         unique.map(a => ({ title: a.title, description: a.description })),
         DEMO_CITY,
       );
-      console.log(`[newsService] AI classifier returned ${classified.length} results`);
       const aiSignals: ExternalSignal[] = [];
       for (const c of classified) {
         if (!c.relevant || !c.signal_type) continue;
@@ -341,9 +339,6 @@ export async function ingestNewsSignals(
       if (aiSignals.length > 0) {
         signals = aiSignals;
         classifier = 'ai';
-        console.log(`[newsService] AI produced ${aiSignals.length} signals`);
-      } else {
-        console.log('[newsService] AI returned no relevant signals, falling back to keywords');
       }
     }
 

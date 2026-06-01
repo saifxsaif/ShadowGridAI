@@ -9,10 +9,6 @@ import type {
   Recommendation,
   FailureChain,
   TeamAllocation,
-  DashboardSummary,
-  ZoneRiskSummary,
-  RiskTrendPoint,
-  SignalCountPoint,
 } from '@/types/types';
 
 // ─── Zones ─────────────────────────────────────────────────────────────────────
@@ -33,6 +29,7 @@ export const DEMO_ZONES: Zone[] = [
     adjacent_zone_ids: ['zone-02', 'zone-03'],
     infrastructure_notes: 'Aging drainage system, low elevation, frequent flooding reports.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
   {
     id: 'zone-02',
@@ -49,6 +46,7 @@ export const DEMO_ZONES: Zone[] = [
     adjacent_zone_ids: ['zone-01', 'zone-04', 'zone-05'],
     infrastructure_notes: 'Power grid under stress during peak hours. Road congestion hotspot.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
   {
     id: 'zone-03',
@@ -65,70 +63,75 @@ export const DEMO_ZONES: Zone[] = [
     adjacent_zone_ids: ['zone-01', 'zone-06'],
     infrastructure_notes: 'Coastal zone with tidal flooding risk. Water supply infrastructure aging.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
   {
     id: 'zone-04',
-    name: 'Northgate Industrial',
+    name: 'Northern Suburbs',
     city: 'Metroville',
-    lat: 40.740,
+    lat: 40.750,
     lng: -73.995,
-    polygon: [[40.736, -74.002], [40.736, -73.988], [40.744, -73.988], [40.744, -74.002]],
-    vulnerability_score: 55,
+    polygon: [[40.745, -74.002], [40.745, -73.988], [40.755, -73.988], [40.755, -74.002]],
+    vulnerability_score: 40,
     flood_sensitivity: 30,
-    historical_failure_rate: 42,
-    elevation_m: 22,
-    population_density: 'low',
-    adjacent_zone_ids: ['zone-02', 'zone-05'],
-    infrastructure_notes: 'Power substation located here. Road blockages affect supply routes.',
+    historical_failure_rate: 28,
+    elevation_m: 32,
+    population_density: 'medium',
+    adjacent_zone_ids: ['zone-02', 'zone-07'],
+    infrastructure_notes: 'Newer infrastructure; occasional traffic congestion near school zones.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
   {
     id: 'zone-05',
-    name: 'Medical Mile',
+    name: 'Industrial East Zone',
     city: 'Metroville',
-    lat: 40.722,
+    lat: 40.720,
     lng: -73.985,
-    polygon: [[40.718, -73.992], [40.718, -73.978], [40.726, -73.978], [40.726, -73.992]],
+    polygon: [[40.715, -73.992], [40.715, -73.978], [40.725, -73.978], [40.725, -73.992]],
     vulnerability_score: 70,
     flood_sensitivity: 40,
-    historical_failure_rate: 35,
-    elevation_m: 18,
-    population_density: 'medium',
+    historical_failure_rate: 65,
+    elevation_m: 8,
+    population_density: 'low',
     adjacent_zone_ids: ['zone-02', 'zone-04'],
-    infrastructure_notes: 'Contains City General Hospital and two clinics. Emergency access is critical.',
+    infrastructure_notes: 'Heavy machinery causes road wear. Power demand peaks unpredictably.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
   {
     id: 'zone-06',
-    name: 'Westfield Residential',
+    name: 'Westbank Residential',
     city: 'Metroville',
-    lat: 40.708,
-    lng: -74.035,
-    polygon: [[40.703, -74.042], [40.703, -74.028], [40.713, -74.028], [40.713, -74.042]],
-    vulnerability_score: 42,
-    flood_sensitivity: 55,
-    historical_failure_rate: 30,
-    elevation_m: 8,
+    lat: 40.695,
+    lng: -74.030,
+    polygon: [[40.690, -74.038], [40.690, -74.022], [40.700, -74.022], [40.700, -74.038]],
+    vulnerability_score: 55,
+    flood_sensitivity: 60,
+    historical_failure_rate: 42,
+    elevation_m: 6,
     population_density: 'high',
-    adjacent_zone_ids: ['zone-03'],
-    infrastructure_notes: 'Dense residential. Water pressure complaints frequent in summer.',
+    adjacent_zone_ids: ['zone-03', 'zone-07'],
+    infrastructure_notes: 'Dense residential area. Water pressure issues during summer.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
   {
     id: 'zone-07',
-    name: 'Tech Corridor East',
+    name: 'University Hill',
     city: 'Metroville',
-    lat: 40.728,
-    lng: -73.975,
-    polygon: [[40.724, -73.982], [40.724, -73.968], [40.732, -73.968], [40.732, -73.982]],
+    lat: 40.760,
+    lng: -74.010,
+    polygon: [[40.755, -74.018], [40.755, -74.002], [40.765, -74.002], [40.765, -74.018]],
     vulnerability_score: 35,
-    flood_sensitivity: 20,
+    flood_sensitivity: 25,
     historical_failure_rate: 22,
-    elevation_m: 28,
+    elevation_m: 45,
     population_density: 'medium',
-    adjacent_zone_ids: ['zone-05'],
-    infrastructure_notes: 'Modern infrastructure. Low risk baseline.',
+    adjacent_zone_ids: ['zone-04', 'zone-06'],
+    infrastructure_notes: 'Elevated terrain provides natural drainage advantage.',
     created_at: '2024-01-01T00:00:00Z',
+    dataset_type: 'demo',
   },
 ];
 
@@ -155,18 +158,6 @@ export const DEMO_RISK_SCORES: RiskScore[] = [
   { id: 'rs-12', zone_id: 'zone-06', category: 'water', score: 44, risk_level: 'medium', citizen_component: 45, weather_component: 35, signal_component: 38, historical_component: 30, propagation_component: 25, explanation: 'Periodic low-pressure reports from residential area. Monitoring recommended.', updated_at: new Date().toISOString() },
   // Tech Corridor — NORMAL
   { id: 'rs-13', zone_id: 'zone-07', category: 'road', score: 18, risk_level: 'normal', citizen_component: 15, weather_component: 20, signal_component: 10, historical_component: 22, propagation_component: 12, explanation: 'Modern infrastructure. No active signals. Routine monitoring.', updated_at: new Date().toISOString() },
-];
-
-// ─── Zone Risk Summaries ──────────────────────────────────────────────────────
-
-export const DEMO_ZONE_RISK_SUMMARIES: ZoneRiskSummary[] = [
-  { zone_id: 'zone-01', zone_name: 'Riverside District',      overall_score: 82, risk_level: 'critical', scores_by_category: { drainage: 88, road: 72, water: 38, power: 28, traffic: 45, emergency_access: 65 }, top_category: 'drainage',          trend: 'rising' },
-  { zone_id: 'zone-03', zone_name: 'Old Harbor Quarter',      overall_score: 73, risk_level: 'high',     scores_by_category: { drainage: 76, road: 45, water: 68, power: 35, traffic: 38, emergency_access: 42 }, top_category: 'drainage',          trend: 'rising' },
-  { zone_id: 'zone-05', zone_name: 'Medical Mile',            overall_score: 64, risk_level: 'high',     scores_by_category: { drainage: 30, road: 48, water: 32, power: 52, traffic: 55, emergency_access: 74 }, top_category: 'emergency_access',  trend: 'stable' },
-  { zone_id: 'zone-02', zone_name: 'Central Business Hub',    overall_score: 60, risk_level: 'high',     scores_by_category: { drainage: 35, road: 50, water: 28, power: 58, traffic: 68, emergency_access: 38 }, top_category: 'traffic',           trend: 'stable' },
-  { zone_id: 'zone-04', zone_name: 'Northgate Industrial',    overall_score: 52, risk_level: 'medium',   scores_by_category: { drainage: 25, road: 42, water: 22, power: 62, traffic: 30, emergency_access: 28 }, top_category: 'power',             trend: 'rising' },
-  { zone_id: 'zone-06', zone_name: 'Westfield Residential',   overall_score: 38, risk_level: 'medium',   scores_by_category: { drainage: 32, road: 28, water: 44, power: 22, traffic: 35, emergency_access: 20 }, top_category: 'water',             trend: 'stable' },
-  { zone_id: 'zone-07', zone_name: 'Tech Corridor East',      overall_score: 18, risk_level: 'low',      scores_by_category: { drainage: 12, road: 18, water: 15, power: 20, traffic: 22, emergency_access: 14 }, top_category: 'road',              trend: 'falling' },
 ];
 
 // ─── Citizen Reports ──────────────────────────────────────────────────────────
@@ -251,48 +242,3 @@ export const DEMO_TEAM_ALLOCATIONS: TeamAllocation[] = [
   { id: 'ta-04', zone_id: 'zone-03', team_type: 'Water Supply Team',   team_count: 1, priority_rank: 4, expected_risk_reduction: 30, deployment_notes: 'Inspect aging pipes before tidal surge.', status: 'planned',  created_at: new Date().toISOString() },
   { id: 'ta-05', zone_id: 'zone-02', team_type: 'Traffic Management',  team_count: 2, priority_rank: 5, expected_risk_reduction: 20, deployment_notes: 'Activate Central Hub bypass routes to reduce gridlock.', status: 'deployed',  created_at: new Date().toISOString() },
 ];
-
-// ─── Dashboard Summary ────────────────────────────────────────────────────────
-
-export const DEMO_DASHBOARD_SUMMARY: DashboardSummary = {
-  total_active_signals: 15,
-  critical_zones_count: 2,
-  most_common_failure_type: 'drainage',
-  estimated_failures_prevented: 7,
-  citizen_reports_today: 8,
-  external_signals_today: 7,
-  response_improvement_pct: 42,
-  last_updated: new Date().toISOString(),
-};
-
-// ─── Risk Trend Data (30 days) ─────────────────────────────────────────────────
-
-export const DEMO_RISK_TREND: RiskTrendPoint[] = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - (29 - i));
-  const noise = () => (Math.random() - 0.5) * 8;
-  const trend = i / 30;
-  return {
-    date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    drainage: Math.min(95, Math.max(5, 55 + trend * 35 + noise())),
-    road: Math.min(90, Math.max(5, 45 + trend * 25 + noise())),
-    water: Math.min(85, Math.max(5, 40 + trend * 15 + noise())),
-    power: Math.min(80, Math.max(5, 42 + trend * 20 + noise())),
-    traffic: Math.min(85, Math.max(5, 50 + trend * 18 + noise())),
-    emergency_access: Math.min(90, Math.max(5, 30 + trend * 30 + noise())),
-    overall: Math.min(90, Math.max(5, 47 + trend * 28 + noise())),
-  };
-});
-
-// ─── Signal Count Trend (14 days) ─────────────────────────────────────────────
-
-export const DEMO_SIGNAL_TREND: SignalCountPoint[] = Array.from({ length: 14 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - (13 - i));
-  return {
-    date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    citizen: Math.floor(3 + Math.random() * 8 + (i / 14) * 5),
-    weather: Math.floor(1 + Math.random() * 4 + (i / 14) * 3),
-    news: Math.floor(2 + Math.random() * 6 + (i / 14) * 4),
-  };
-});

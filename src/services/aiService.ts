@@ -119,18 +119,11 @@ export async function classifyArticles(
       body: JSON.stringify({ articles, city }),
       signal: AbortSignal.timeout(25000),
     });
-    if (!res.ok) {
-      console.warn(`[aiService] news-classify HTTP ${res.status}`);
-      return [];
-    }
+    if (!res.ok) return [];
     const data = await res.json();
-    if (!data?.ok || !Array.isArray(data.results)) {
-      console.warn('[aiService] news-classify unexpected response:', data);
-      return [];
-    }
+    if (!data?.ok || !Array.isArray(data.results)) return [];
     return data.results as ClassifiedArticle[];
-  } catch (err) {
-    console.warn('[aiService] news-classify failed:', err instanceof Error ? err.message : err);
+  } catch {
     return [];
   }
 }
