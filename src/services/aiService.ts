@@ -117,13 +117,20 @@ export async function classifyArticles(
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ articles, city }),
-      signal: AbortSignal.timeout(22000),
+      signal: AbortSignal.timeout(25000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[aiService] news-classify HTTP ${res.status}`);
+      return [];
+    }
     const data = await res.json();
-    if (!data?.ok || !Array.isArray(data.results)) return [];
+    if (!data?.ok || !Array.isArray(data.results)) {
+      console.warn('[aiService] news-classify unexpected response:', data);
+      return [];
+    }
     return data.results as ClassifiedArticle[];
-  } catch {
+  } catch (err) {
+    console.warn('[aiService] news-classify failed:', err instanceof Error ? err.message : err);
     return [];
   }
 }
